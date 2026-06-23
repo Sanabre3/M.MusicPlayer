@@ -1,0 +1,16 @@
+{
+  "name": "aurora-turntable",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Aurora Turntable — an immersive, audio-reactive music player in TypeScript",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
+  }
+}

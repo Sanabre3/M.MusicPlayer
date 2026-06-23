@@ -1,88 +1,130 @@
 # 🎛️ Aurora Turntable
 
-An immersive, audio-reactive music player built with **TypeScript** and the Web
-Audio API. The whole stage re-themes itself to each track's cover art, a real
-vinyl record spins as it plays, and a live spectrum radiates around it — driven
-by the actual decoded audio, not a faked progress bar.
+Player de música imersivo e reativo ao áudio, construído com **TypeScript** e a Web Audio API. O palco inteiro se re-tematiza a cada faixa com base nas cores da capa do álbum, um vinil real gira durante a reprodução e um espectro circular de frequências pulsa ao redor dele — alimentado pelo áudio decodificado de verdade, não por uma barra de progresso simulada.
 
-> Rebuilt from the original vanilla-JS "Mini Music Player". The old simulated
-> player is preserved in git history.
+> Reconstruído a partir do "Mini Music Player" original (vanilla JS). O código antigo está preservado no histórico do git.
 
-## ✨ Highlights
+---
 
-- **Turntable identity** — a real spinning vinyl with grooves, a moving tonearm,
-  and the album art as the center label.
-- **Live audio visualizer** — a circular frequency spectrum drawn on canvas from
-  a Web Audio `AnalyserNode`. The backdrop "breathes" with the bass.
-- **Dynamic theming** — the accent and backdrop colors are extracted on-device
-  from each cover image, so every track feels different.
-- **Built in strict TypeScript**, bundled with Vite.
+## ✨ Destaques
 
-## 🔌 Device audio integration
+- **Identidade de toca-discos** — vinil girante com sulcos, braço de agulha que desce ao dar play e arte do álbum como rótulo central.
+- **Visualizador de áudio ao vivo** — espectro circular de frequências desenhado em canvas, lido diretamente de um `AnalyserNode` da Web Audio API.
+- **Tematização dinâmica** — as cores de destaque e do fundo são extraídas no dispositivo a partir de cada capa, então cada faixa tem uma identidade visual própria.
+- **TypeScript estrito** com bundler Vite — tipagem completa, build em ~250ms.
 
-Three real integrations with the device's audio stack:
+---
 
-1. **Web Audio API** — `<audio>` → `MediaElementSource` → `Gain` → `Analyser` →
-   output. Real playback plus live frequency data ([src/audio-engine.ts](src/audio-engine.ts)).
-2. **MediaSession API** — OS-level controls: hardware/keyboard media keys, the
-   lock screen, and notification controls all drive the player
-   ([src/media-session.ts](src/media-session.ts)).
-3. **Load your own files** — the **Load track** button or drag-and-drop anywhere
-   adds local audio files to the crate and plays them.
+## 🔌 Integração com o áudio do dispositivo
 
-## 🎧 Spotify (optional)
+Três integrações reais com a pilha de áudio do sistema operacional:
 
-Connect Spotify to stream straight in the page. It uses the **Authorization Code
-flow with PKCE** (no client secret) plus the **Web Playback SDK**
-([src/spotify.ts](src/spotify.ts)).
+### 1. Web Audio API
 
-Requirements:
+```text
+<audio> → MediaElementSource → GainNode → AnalyserNode → destino de saída
+```
 
-1. Create an app at the
-   [Spotify developer dashboard](https://developer.spotify.com/dashboard).
-2. Add this page's exact URL (e.g. `http://localhost:5173/`) as a **Redirect URI**.
-3. Click **Connect Spotify**, paste your **Client ID**, and authorize.
-4. Playback requires **Spotify Premium** (an SDK limitation).
+Reprodução real pelo roteamento de áudio do SO + dados de frequência ao vivo para o visualizador. Implementado em [src/audio-engine.ts](src/audio-engine.ts).
 
-The client id is stored in `localStorage`; nothing is sent anywhere except
-Spotify's own auth and API endpoints.
+### 2. MediaSession API
 
-## 🚀 Run it
+Conecta o player aos controles de mídia do sistema:
+
+- Teclas de mídia do teclado (play/pause/próxima/anterior)
+- Tela de bloqueio (Android, iOS, Windows)
+- Notificações do navegador com controles de transporte
+
+Implementado em [src/media-session.ts](src/media-session.ts).
+
+### 3. Carregar arquivos do dispositivo
+
+- Botão **"Load track"** na barra superior
+- **Drag-and-drop** de arquivos de áudio em qualquer parte da janela
+
+Múltiplos arquivos são aceitos de uma vez e adicionados à fila automaticamente.
+
+---
+
+## 🎧 Spotify (opcional)
+
+Conecte o Spotify para transmitir direto no browser. Usa **Authorization Code + PKCE** (sem client secret — seguro para front-ends estáticos) e o **Web Playback SDK** para transformar esta página em um dispositivo Spotify Connect. Implementado em [src/spotify.ts](src/spotify.ts).
+
+### Como configurar
+
+1. Crie um app no [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
+2. Adicione a URL exata desta página como **Redirect URI** (ex: `http://localhost:5173/`).
+3. Clique em **"Conectar Spotify"** na interface, cole o **Client ID** e autorize.
+4. A reprodução requer **Spotify Premium** — limitação do Web Playback SDK.
+
+O Client ID é salvo no `localStorage`; nenhum dado é enviado a servidores que não sejam os próprios endpoints do Spotify.
+
+---
+
+## 🚀 Executar localmente
 
 ```bash
 npm install
-npm run dev      # start the dev server (opens http://localhost:5173)
-npm run build    # type-check + production build into dist/
-npm run preview  # serve the production build
+npm run dev      # servidor de desenvolvimento em http://localhost:5173
+npm run build    # type-check + build de produção em dist/
+npm run preview  # serve o build de produção localmente
 ```
 
-## ⌨️ Shortcuts
+---
 
-| Key              | Action            |
-| ---------------- | ----------------- |
-| `Space`          | Play / pause      |
-| `Shift + ←` / `→`| Previous / next   |
-| `←` / `→`        | Seek ±5s (on bar) |
+## ⌨️ Atalhos de teclado
 
-## 🗂️ Structure
+| Tecla              | Ação                        |
+| ------------------ | --------------------------- |
+| `Espaço`           | Play / Pause                |
+| `Shift + →`        | Próxima faixa               |
+| `Shift + ←`        | Faixa anterior              |
+| `→` / `←`          | Avançar/voltar 5s (na barra)|
 
-```
+---
+
+## 🗂️ Estrutura do projeto
+
+```text
 src/
-├── main.ts          # controller — wires UI, state, and the modules below
-├── audio-engine.ts  # HTMLAudio + Web Audio graph + analyser
-├── visualizer.ts    # circular canvas spectrum
-├── color.ts         # on-device palette extraction from cover art
-├── media-session.ts # OS media controls bridge
-├── spotify.ts       # PKCE auth + Web Playback SDK
-├── playlist.ts      # default track data
-├── types.ts         # shared types
-└── styles.css       # immersive design system
+├── main.ts           # controlador principal — orquestra UI, estado e módulos
+├── audio-engine.ts   # motor Web Audio: HTMLAudio + grafo de nós + AnalyserNode
+├── visualizer.ts     # espectro circular em canvas (requestAnimationFrame)
+├── color.ts          # extração de paleta de cores a partir da capa (no dispositivo)
+├── media-session.ts  # ponte com controles de mídia do SO (MediaSession API)
+├── spotify.ts        # autenticação PKCE + Web Playback SDK
+├── playlist.ts       # faixas padrão do repositório
+├── types.ts          # tipos TypeScript compartilhados
+└── styles.css        # sistema de design imersivo (variáveis CSS + animações)
 ```
 
-## 🎨 Design
+---
 
-- **Palette**: deep violet-night ground `#14101A`, warm cream text `#F2EDE4`,
-  amber accent `#FF9E5E` (overridden per-track from cover art), periwinkle
-  counterpoint `#6C7BFF`.
-- **Type**: Bricolage Grotesque (display) · Inter (body) · Space Mono (timecodes).
-- Respects `prefers-reduced-motion`.
+## 🎨 Sistema de design
+
+| Token         | Valor padrão | Papel                                      |
+| ------------- | ------------ | ------------------------------------------ |
+| `--ground`    | `#14101A`    | Fundo base (violeta noturno)               |
+| `--text`      | `#F2EDE4`    | Texto principal (creme quente)             |
+| `--accent`    | `#FF9E5E`    | Destaque animado — sobrescrito por faixa   |
+| `--accent-2`  | `#6C7BFF`    | Periwinkle elétrico — gradiente do scrubber|
+| `--shade`     | `#3A2A4A`    | Sombra do backdrop — sobrescrita por faixa |
+| `--bass`      | `0`          | Nível de graves (0..1) — atualizado a 60fps|
+
+**Tipografia:** Bricolage Grotesque (display) · Inter (corpo) · Space Mono (timecodes)
+
+O player respeita `prefers-reduced-motion` — todas as animações são desativadas.
+
+---
+
+## 📦 Tecnologias
+
+| Tecnologia            | Uso                                      |
+| --------------------- | ---------------------------------------- |
+| TypeScript 5 (strict) | Tipagem completa, zero `any` implícito   |
+| Vite 6                | Bundler, HMR, resolução de assets        |
+| Web Audio API         | Grafo de áudio + AnalyserNode            |
+| Canvas 2D API         | Visualizador de espectro                 |
+| MediaSession API      | Controles de mídia do SO                 |
+| Spotify Web Playback  | Streaming via Spotify Connect            |
+| CSS Custom Properties | Tematização dinâmica por faixa           |

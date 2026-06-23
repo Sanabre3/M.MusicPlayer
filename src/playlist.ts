@@ -1,16 +1,20 @@
+// =============================================================================
+// playlist.ts — Faixas padrão exibidas ao abrir o player pela primeira vez
+// =============================================================================
+
 import type { Track } from "./types";
 
-// Vite resolves these imports to hashed asset URLs at build time.
+// O Vite resolve esses imports para URLs com hash no build de produção,
+// garantindo que os assets sejam cacheados corretamente pelo navegador.
 import track1 from "../assets/1.mp3";
 import cover1 from "../assets/1.jpg";
 import cover2 from "../assets/2.jpg";
 import cover3 from "../assets/3.jpg";
 
-// The repo ships a single real audio file. We surface it as the opening
-// track and pair the two remaining covers as "load your own" placeholders
-// so the playlist demonstrates re-theming without pretending audio exists
-// where it doesn't. Drop in your own files (toolbar button or drag-and-drop)
-// to fill the rest of the crate.
+// O repositório inclui apenas um arquivo de áudio real (1.mp3).
+// As outras duas faixas são marcadores visuais que demonstram a re-tematização
+// por capa, sem simular áudio inexistente.
+// Para adicionar mais músicas: arraste arquivos para a janela ou use "Load track".
 export const defaultTracks: Track[] = [
   {
     id: "house-of-wax",
@@ -18,25 +22,25 @@ export const defaultTracks: Track[] = [
     artist: "The Groove Sessions",
     album: "Side A",
     cover: cover1,
-    src: track1,
+    src: track1,      // único áudio real do repositório
     source: "local",
   },
   {
     id: "amber-static",
     title: "Amber Static",
-    artist: "Drop a file to play",
+    artist: "Solte um arquivo para reproduzir",
     album: "Side B",
     cover: cover2,
-    src: "",
+    src: "",           // sem áudio — usuário deve arrastar um arquivo
     source: "local",
   },
   {
     id: "periwinkle-drift",
     title: "Periwinkle Drift",
-    artist: "Drop a file to play",
+    artist: "Solte um arquivo para reproduzir",
     album: "Side B",
     cover: cover3,
-    src: "",
+    src: "",           // sem áudio — usuário deve arrastar um arquivo
     source: "local",
   },
 ];

@@ -1,4 +1,4 @@
-# 🎛️ Aurora Turntable
+# 🎛️ Zone Player
 
 Player de música imersivo e reativo ao áudio, construído com **TypeScript** e a Web Audio API. O palco inteiro se re-tematiza a cada faixa com base nas cores da capa do álbum, um vinil real gira durante a reprodução e um espectro circular de frequências pulsa ao redor dele — alimentado pelo áudio decodificado de verdade, não por uma barra de progresso simulada.
 

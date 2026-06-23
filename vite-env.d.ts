@@ -11,6 +11,8 @@ declare module "*.mp3" {
 interface Window {
   Spotify?: typeof Spotify;
   onSpotifyWebPlaybackSDKReady?: () => void;
+  YT?: typeof YT;
+  onYouTubeIframeAPIReady?: () => void;
 }
 
 declare namespace Spotify {
@@ -51,5 +53,53 @@ declare namespace Spotify {
     seek(positionMs: number): Promise<void>;
     setVolume(volume: number): Promise<void>;
     getCurrentState(): Promise<WebPlaybackState | null>;
+  }
+}
+
+// Minimal typings for the YouTube IFrame Player API global.
+// Loaded at runtime from www.youtube.com/iframe_api only when the user
+// chooses to search/play a YouTube video.
+declare namespace YT {
+  interface PlayerVars {
+    autoplay?: 0 | 1;
+    controls?: 0 | 1;
+    rel?: 0 | 1;
+    modestbranding?: 0 | 1;
+    playsinline?: 0 | 1;
+  }
+  interface PlayerEvents {
+    onReady?: (event: { target: Player }) => void;
+    onStateChange?: (event: { data: number; target: Player }) => void;
+  }
+  interface PlayerOptions {
+    width?: string | number;
+    height?: string | number;
+    videoId?: string;
+    playerVars?: PlayerVars;
+    events?: PlayerEvents;
+  }
+  enum PlayerState {
+    UNSTARTED = -1,
+    ENDED = 0,
+    PLAYING = 1,
+    PAUSED = 2,
+    BUFFERING = 3,
+    CUED = 5,
+  }
+  class Player {
+    constructor(elementId: string | HTMLElement, options: PlayerOptions);
+    loadVideoById(videoId: string): void;
+    cueVideoById(videoId: string): void;
+    playVideo(): void;
+    pauseVideo(): void;
+    stopVideo(): void;
+    seekTo(seconds: number, allowSeekAhead: boolean): void;
+    setVolume(volume: number): void;
+    getVolume(): number;
+    getCurrentTime(): number;
+    getDuration(): number;
+    getPlayerState(): number;
+    getIframe(): HTMLIFrameElement;
+    destroy(): void;
   }
 }

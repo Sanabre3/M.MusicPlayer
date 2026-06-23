@@ -11,6 +11,9 @@ Player de música imersivo e reativo ao áudio, construído com **TypeScript** e
 - **Identidade de toca-discos** — vinil girante com sulcos, braço de agulha que desce ao dar play e arte do álbum como rótulo central.
 - **Visualizador de áudio ao vivo** — espectro circular de frequências desenhado em canvas, lido diretamente de um `AnalyserNode` da Web Audio API.
 - **Tematização dinâmica** — as cores de destaque e do fundo são extraídas no dispositivo a partir de cada capa, então cada faixa tem uma identidade visual própria.
+- **Equalizador estilo FxSound** — EQ gráfico de 10 bandas + Bass Boost, Ambience (reverb) e Dynamic Boost, todos construídos sobre nós nativos da Web Audio API.
+- **Temas lo-fi** — presets de fundo estético (Lo-Fi Dusk, Vaporwave, Midnight Study, Forest Tape, Sunset Cassette, Mono Noir) ou modo Auto que extrai as cores da capa.
+- **YouTube** — busca por nome via Data API, miniatura no rótulo do vinil e vídeo ao fundo opcional.
 - **TypeScript estrito** com bundler Vite — tipagem completa, build em ~250ms.
 
 ---
@@ -61,6 +64,61 @@ O Client ID é salvo no `localStorage`; nenhum dado é enviado a servidores que 
 
 ---
 
+## ▷ YouTube
+
+Busca e reproduz vídeos do YouTube direto no player. Clique em **YouTube** na barra superior, pesquise por nome e escolha um resultado — ele entra na fila e toca. A miniatura aparece como rótulo do vinil; o botão **Ver vídeo** sob o deck revela o vídeo ocupando o fundo do palco (o áudio toca de qualquer forma). Implementado em [src/youtube.ts](src/youtube.ts).
+
+### Como configurar a busca
+
+1. Gere uma **YouTube Data API v3 key** no [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
+2. No diálogo do YouTube, abra **Configurar API key** e cole a chave (salva apenas no `localStorage`).
+3. Pesquise e clique em um resultado para tocar.
+
+> A reprodução usa a **IFrame Player API** oficial. Como o áudio vem de um iframe cross-origin, o visualizador e o equalizador atuam apenas nas faixas locais — YouTube e Spotify usam o áudio próprio da plataforma.
+
+---
+
+## 🎛 Equalizador (estilo FxSound)
+
+Abra o painel pelo botão **EQ**. Tudo é montado sobre nós nativos da Web Audio API, inseridos no grafo entre a fonte e o ganho:
+
+- **EQ gráfico de 10 bandas** (31 Hz → 16 kHz) com filtros _peaking_, ±12 dB cada.
+- **Presets** — Flat, Music, Bass Boost, Lo-Fi, Vocal, Treble, Podcast, Night.
+- **Bass Boost** — realce de graves via filtro _lowshelf_.
+- **Ambience** — reverb sintético (ConvolverNode com resposta ao impulso gerada no dispositivo).
+- **Dynamic Boost** — compressor + ganho de _makeup_ para mais presença sem clipar.
+- **Bypass** — o interruptor **Ativo** liga/desliga todo o processamento.
+- **Saída de áudio** — seletor (`AudioContext.setSinkId`) que roteia a reprodução **local** para um dispositivo específico, como o do FxSound.
+
+Implementado em [src/equalizer.ts](src/equalizer.ts) e ligado ao grafo em [src/audio-engine.ts](src/audio-engine.ts).
+
+### Usar com o FxSound (ou outro processador do sistema)
+
+O Web Playback SDK do Spotify **não** expõe equalizador, e nem ele nem o YouTube (iframe) permitem redirecionar a saída por elemento — ambos usam a saída padrão do SO. Então, para processar tudo com o FxSound:
+
+1. Defina o dispositivo do **FxSound como saída padrão do Windows** → Spotify e YouTube já passam por ele.
+2. No painel **EQ**, escolha esse mesmo dispositivo em **Saída de áudio** → as faixas locais também passam a ser roteadas para lá (Chrome/Edge).
+
+---
+
+## 🎨 Temas lo-fi
+
+O botão **Tema** abre um seletor de estéticas de fundo:
+
+| Tema             | Vibe                              |
+| ---------------- | --------------------------------- |
+| Auto · capa      | Cores extraídas da capa (padrão)  |
+| Lo-Fi Dusk       | Roxo/laranja crepuscular          |
+| Vaporwave        | Rosa/ciano                        |
+| Midnight Study   | Azul profundo                     |
+| Forest Tape      | Verde/dourado                     |
+| Sunset Cassette  | Pôr do sol quente                 |
+| Mono Noir        | Monocromático                     |
+
+Os fundos usam apenas gradientes CSS (funcionam offline). A escolha é persistida no `localStorage`. Implementado em [src/themes.ts](src/themes.ts).
+
+---
+
 ## 🚀 Executar localmente
 
 ```bash
@@ -76,10 +134,12 @@ npm run preview  # serve o build de produção localmente
 
 | Tecla              | Ação                        |
 | ------------------ | --------------------------- |
-| `Espaço`           | Play / Pause                |
-| `Shift + →`        | Próxima faixa               |
-| `Shift + ←`        | Faixa anterior              |
+| `Espaço` / `F8`    | Play / Pause                |
+| `Shift + →` / `F9` | Próxima faixa               |
+| `Shift + ←` / `F7` | Faixa anterior              |
 | `→` / `←`          | Avançar/voltar 5s (na barra)|
+
+> `F7` / `F8` / `F9` funcionam mesmo com o foco em um campo de texto.
 
 ---
 
@@ -88,11 +148,14 @@ npm run preview  # serve o build de produção localmente
 ```text
 src/
 ├── main.ts           # controlador principal — orquestra UI, estado e módulos
-├── audio-engine.ts   # motor Web Audio: HTMLAudio + grafo de nós + AnalyserNode
+├── audio-engine.ts   # motor Web Audio: HTMLAudio + EQ + grafo de nós + AnalyserNode
+├── equalizer.ts      # EQ de 10 bandas + bass boost / ambience / dynamic (FxSound)
 ├── visualizer.ts     # espectro circular em canvas (requestAnimationFrame)
 ├── color.ts          # extração de paleta de cores a partir da capa (no dispositivo)
 ├── media-session.ts  # ponte com controles de mídia do SO (MediaSession API)
 ├── spotify.ts        # autenticação PKCE + Web Playback SDK
+├── youtube.ts        # busca (Data API v3) + IFrame Player API
+├── themes.ts         # presets de tema lo-fi + aplicação
 ├── playlist.ts       # faixas padrão do repositório
 ├── types.ts          # tipos TypeScript compartilhados
 └── styles.css        # sistema de design imersivo (variáveis CSS + animações)
@@ -126,5 +189,7 @@ O player respeita `prefers-reduced-motion` — todas as animações são desativ
 | Web Audio API         | Grafo de áudio + AnalyserNode            |
 | Canvas 2D API         | Visualizador de espectro                 |
 | MediaSession API      | Controles de mídia do SO                 |
+| BiquadFilter/Convolver| Equalizador + efeitos estilo FxSound     |
 | Spotify Web Playback  | Streaming via Spotify Connect            |
+| YouTube IFrame + Data | Busca e reprodução de vídeos             |
 | CSS Custom Properties | Tematização dinâmica por faixa           |

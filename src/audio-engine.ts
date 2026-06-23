@@ -2,15 +2,20 @@
 // audio-engine.ts — Motor de áudio real via Web Audio API
 //
 // Grafo de sinal:
-//   <audio> → MediaElementSource → GainNode → AnalyserNode → destination
+//   <audio> → MediaElementSource → Equalizer → GainNode → AnalyserNode → destination
 //
 // O AudioContext é criado de forma lazy no primeiro gesto do usuário porque
 // navegadores bloqueiam contextos iniciados sem interação humana (política
 // de autoplay). A partir daí, o AnalyserNode fornece dados de frequência
 // em tempo real para o visualizador sem custo adicional de processamento.
+//
+// O equalizador (estilo FxSound) é inserido entre a fonte e o ganho. Como o
+// AudioContext é lazy, os ajustes do EQ são mantidos em estado próprio e
+// aplicados ao grafo no momento em que ele é construído.
 // =============================================================================
 
-import type { PlaybackSnapshot } from "./types";
+import type { EqualizerSettings, PlaybackSnapshot } from "./types";
+import { Equalizer, defaultEqSettings } from "./equalizer";
 
 /** Eventos que o motor emite para os ouvintes externos. */
 type EngineEvent =
@@ -23,11 +28,21 @@ type EngineEvent =
 
 type Listener = (snapshot: PlaybackSnapshot) => void;
 
+/** AudioContext com setSinkId (Audio Output Devices API — Chrome/Edge). */
+interface AudioContextWithSink extends AudioContext {
+  setSinkId?(sinkId: string): Promise<void>;
+}
+
 export class AudioEngine {
   readonly element: HTMLAudioElement;
   private ctx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private gain: GainNode | null = null;
+  private eq: Equalizer | null = null;
+  /** Ajustes do EQ — fonte da verdade enquanto o grafo ainda não existe. */
+  private eqSettings: EqualizerSettings = defaultEqSettings();
+  /** ID do dispositivo de saída desejado ("" = padrão do sistema). */
+  private sinkId = "";
   private readonly listeners = new Map<EngineEvent, Set<Listener>>();
   /** Buffer reutilizável para leitura do espectro de frequências. */
   private freqData: Uint8Array<ArrayBuffer> = new Uint8Array(0);
@@ -53,6 +68,7 @@ export class AudioEngine {
 
     const ctx = new AudioContext();
     const source = ctx.createMediaElementSource(this.element);
+    const eq = new Equalizer(ctx, this.eqSettings);
     const gain = ctx.createGain();
     const analyser = ctx.createAnalyser();
 
@@ -61,14 +77,20 @@ export class AudioEngine {
     // smoothingTimeConstant suaviza variações bruscas entre frames do visualizador.
     analyser.smoothingTimeConstant = 0.82;
 
-    source.connect(gain);
+    // source → Equalizer → gain → analyser → destino
+    source.connect(eq.input);
+    eq.output.connect(gain);
     gain.connect(analyser);
     analyser.connect(ctx.destination);
 
     this.ctx = ctx;
+    this.eq = eq;
     this.gain = gain;
     this.analyser = analyser;
     this.freqData = new Uint8Array(analyser.frequencyBinCount);
+
+    // Aplica a saída de áudio escolhida assim que o contexto existe.
+    if (this.sinkId) void this.applySink();
   }
 
   /** Carrega uma nova URL de áudio no elemento. */
@@ -120,6 +142,79 @@ export class AudioEngine {
 
   get volume(): number {
     return this.element.volume;
+  }
+
+  // --- Equalizador (estilo FxSound) ------------------------------------------
+
+  /** Ajustes atuais do EQ (cópia segura para a interface). */
+  get equalizerSettings(): EqualizerSettings {
+    return { ...this.eqSettings, bands: [...this.eqSettings.bands] };
+  }
+
+  /** Substitui o conjunto completo de ajustes e aplica ao grafo (se existir). */
+  setEqualizer(settings: EqualizerSettings): void {
+    this.eqSettings = { ...settings, bands: [...settings.bands] };
+    this.eq?.apply(this.eqSettings);
+  }
+
+  /** Atualiza o ganho de uma banda específica (dB). */
+  setEqBand(index: number, db: number): void {
+    if (this.eqSettings.bands[index] === undefined) return;
+    this.eqSettings.bands[index] = db;
+    this.eqSettings.preset = "Custom";
+    this.eq?.setBand(index, db);
+  }
+
+  setEqEnabled(on: boolean): void {
+    this.eqSettings.enabled = on;
+    this.eq?.setEnabled(on);
+  }
+
+  setBassBoost(db: number): void {
+    this.eqSettings.bassBoost = db;
+    this.eq?.setBassBoost(db);
+  }
+
+  setAmbience(amount: number): void {
+    this.eqSettings.ambience = amount;
+    this.eq?.setAmbience(amount);
+  }
+
+  setDynamic(on: boolean): void {
+    this.eqSettings.dynamic = on;
+    this.eq?.setDynamic(on);
+  }
+
+  // --- Saída de áudio (Audio Output Devices API) -----------------------------
+
+  /** Indica se o navegador permite escolher o dispositivo de saída do grafo. */
+  get supportsOutputSelection(): boolean {
+    return "setSinkId" in AudioContext.prototype;
+  }
+
+  /** ID do dispositivo de saída atual ("" = padrão do sistema). */
+  get outputDeviceId(): string {
+    return this.sinkId;
+  }
+
+  /**
+   * Roteia a reprodução local para um dispositivo de saída específico.
+   * `deviceId` vazio volta para a saída padrão do sistema operacional.
+   */
+  async setOutputDevice(deviceId: string): Promise<void> {
+    this.sinkId = deviceId;
+    if (this.ctx) await this.applySink();
+  }
+
+  /** Aplica o sinkId atual ao AudioContext, se a API estiver disponível. */
+  private async applySink(): Promise<void> {
+    const ctx = this.ctx as AudioContextWithSink | null;
+    if (!ctx?.setSinkId) return;
+    try {
+      await ctx.setSinkId(this.sinkId);
+    } catch (err) {
+      console.warn("Falha ao definir a saída de áudio:", err);
+    }
   }
 
   get playing(): boolean {

@@ -634,7 +634,419 @@ body {
   gap: 0.6rem;
 }
 
+/* --- lo-fi theme background ----------------------------------------------- */
+.theme-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  opacity: 0;
+  background-size: 200% 200%;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+.theme-bg.is-active {
+  opacity: 1;
+}
+.theme-bg.is-animated {
+  animation: drift 24s ease-in-out infinite alternate;
+}
+/* Quando um tema lo-fi está ativo, a capa borrada do fundo recua para o
+   gradiente do tema dominar o palco. */
+body.themed .backdrop {
+  opacity: 0.32;
+}
+
+/* --- youtube background video --------------------------------------------- */
+.video-stage {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: #000;
+  transition: opacity 0.5s ease;
+}
+.video-stage #ytPlayer,
+.video-stage iframe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* Escala o iframe 16:9 para cobrir a viewport inteira. */
+  width: max(100vw, 177.78vh);
+  height: max(100vh, 56.25vw);
+  transform: translate(-50%, -50%);
+  border: 0;
+}
+/* Modo "ver vídeo": o vídeo aparece atrás da UI; a capa borrada some. */
+body.is-video .video-stage {
+  opacity: 1;
+}
+body.is-video .backdrop {
+  opacity: 0;
+}
+/* Véu para manter o texto legível sobre o vídeo. */
+body.is-video .video-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(8, 6, 12, 0.45), rgba(8, 6, 12, 0.72));
+}
+
+.video-toggle {
+  margin-top: 1.1rem;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--text);
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  padding: 0.5rem 1.1rem;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+.video-toggle:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--glass-line));
+}
+.video-toggle[aria-pressed="true"] {
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.pill--youtube .pill__glyph {
+  color: #ff4d4d;
+}
+.pill--youtube.is-live {
+  border-color: #ff4d4d;
+  color: #ffd0d0;
+}
+
+/* --- equalizer panel (FxSound-style) -------------------------------------- */
+.eq-panel {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(1rem, 4vh, 2rem);
+  transform: translate(-50%, 130%);
+  z-index: 12;
+  width: min(40rem, 94vw);
+  padding: clamp(1.1rem, 3vw, 1.6rem);
+  background: color-mix(in oklab, var(--ground) 80%, black);
+  border: 1px solid var(--glass-line);
+  border-radius: 1.3rem;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(22px);
+  transition: transform 0.42s cubic-bezier(0.6, 0, 0.2, 1), opacity 0.3s ease;
+  opacity: 0;
+}
+.eq-panel.is-open {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+.eq-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+.eq-panel__title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.25rem;
+  margin: 0;
+  flex: 1;
+}
+.eq-panel__close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+}
+.eq-panel__close:hover {
+  background: var(--glass);
+  color: var(--text);
+}
+.eq-panel__note {
+  margin: 1rem 0 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.eq-presets {
+  margin-bottom: 1.1rem;
+}
+.eq-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.eq-field__label {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.eq-select {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--text);
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+}
+
+/* faixa de sliders verticais das 10 bandas */
+.eq-bands {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: clamp(0.3rem, 1.4vw, 0.7rem);
+  align-items: end;
+  padding: 0.4rem 0 0.2rem;
+}
+.eq-band {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+.eq-band__slider {
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 6px;
+  height: clamp(7rem, 22vh, 10rem);
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  cursor: ns-resize;
+  accent-color: var(--accent);
+}
+.eq-band__freq {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--muted);
+}
+.eq-band__gain {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--accent);
+  min-height: 0.8rem;
+}
+
+.eq-effects {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: clamp(0.8rem, 3vw, 1.6rem);
+  margin-top: 1.3rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--glass-line);
+}
+.eq-effects .eq-field {
+  flex: 1;
+  min-width: 8rem;
+}
+.eq-knob {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.eq-knob::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 60%, transparent);
+}
+.eq-knob::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* toggle estilo switch */
+.eq-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+.eq-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.eq-switch__track {
+  width: 2.4rem;
+  height: 1.3rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  position: relative;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+.eq-switch__dot {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform 0.2s ease;
+}
+.eq-switch input:checked + .eq-switch__track {
+  background: var(--accent);
+}
+.eq-switch input:checked + .eq-switch__track .eq-switch__dot {
+  transform: translateX(1.1rem);
+}
+.eq-switch__label {
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+/* --- theme picker grid ---------------------------------------------------- */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 1.3rem;
+}
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0;
+  border: 1px solid var(--glass-line);
+  border-radius: 0.9rem;
+  background: var(--glass);
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.16s ease, border-color 0.16s ease;
+}
+.theme-card:hover {
+  transform: translateY(-2px);
+}
+.theme-card.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 40%, transparent);
+}
+.theme-card__swatch {
+  height: 3.6rem;
+  background-size: 200% 200%;
+}
+.theme-card__name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 0 0.6rem 0.6rem;
+  text-align: left;
+}
+
+/* --- youtube dialog ------------------------------------------------------- */
+.dialog--wide {
+  max-width: 40rem;
+  width: 94vw;
+}
+.yt-key {
+  margin-bottom: 1rem;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+.yt-key summary {
+  cursor: pointer;
+  color: var(--accent);
+  margin-bottom: 0.6rem;
+}
+.yt-search {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+.yt-search .dialog__input {
+  margin-bottom: 0;
+  flex: 1;
+}
+.yt-status {
+  font-size: 0.8rem;
+  color: var(--muted);
+  min-height: 1rem;
+  margin-bottom: 0.6rem;
+}
+.yt-results {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.yt-result {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.45rem;
+  border-radius: 0.7rem;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+.yt-result:hover {
+  background: var(--glass);
+}
+.yt-result__thumb {
+  width: 5rem;
+  height: 2.9rem;
+  border-radius: 0.45rem;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #000;
+}
+.yt-result__meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.yt-result__title {
+  font-weight: 600;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.yt-result__channel {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
 /* --- animations ----------------------------------------------------------- */
+@keyframes drift {
+  to {
+    background-position: 100% 100%;
+  }
+}
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -691,7 +1103,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .vinyl.spinning,
   .wordmark__dot,
-  .crate__eq i {
+  .crate__eq i,
+  .theme-bg.is-animated {
     animation: none;
   }
   * {

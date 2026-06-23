@@ -17,6 +17,10 @@
     />
   </head>
   <body>
+    <div id="themeBg" class="theme-bg" aria-hidden="true"></div>
+    <div id="videoStage" class="video-stage" aria-hidden="true">
+      <div id="ytPlayer"></div>
+    </div>
     <div id="backdrop" class="backdrop"></div>
     <div class="grain" aria-hidden="true"></div>
 
@@ -33,6 +37,31 @@
           title="Play a file from this device"
         >
           <span class="pill__glyph">＋</span> Load track
+        </button>
+        <button
+          id="youtubeBtn"
+          class="pill pill--youtube"
+          type="button"
+          title="Buscar e tocar do YouTube"
+        >
+          <span class="pill__glyph">▷</span> YouTube
+        </button>
+        <button
+          id="eqBtn"
+          class="pill"
+          type="button"
+          title="Equalizador e efeitos"
+          aria-expanded="false"
+        >
+          🎛 EQ
+        </button>
+        <button
+          id="themeBtn"
+          class="pill"
+          type="button"
+          title="Temas lo-fi"
+        >
+          🎨 Tema
         </button>
         <button id="spotifyBtn" class="pill pill--spotify" type="button">
           Connect Spotify
@@ -55,6 +84,16 @@
             <span class="tonearm__head"></span>
           </div>
         </div>
+        <button
+          id="videoToggle"
+          class="video-toggle"
+          type="button"
+          hidden
+          aria-pressed="false"
+          title="Mostrar/ocultar o vídeo ao fundo"
+        >
+          ▣ Ver vídeo
+        </button>
       </section>
 
       <section class="readout">
@@ -183,6 +222,94 @@
     </dialog>
 
     <input id="fileInput" type="file" accept="audio/*" multiple hidden />
+
+    <!-- Painel do Equalizador (estilo FxSound) -->
+    <aside id="eqPanel" class="eq-panel" aria-label="Equalizador" hidden>
+      <header class="eq-panel__head">
+        <h2 class="eq-panel__title">Equalizador</h2>
+        <label class="eq-switch">
+          <input id="eqEnabled" type="checkbox" checked />
+          <span class="eq-switch__track"><span class="eq-switch__dot"></span></span>
+          <span class="eq-switch__label">Ativo</span>
+        </label>
+        <button id="eqClose" class="eq-panel__close" type="button" aria-label="Fechar">✕</button>
+      </header>
+
+      <div class="eq-presets">
+        <label class="eq-field">
+          <span class="eq-field__label">Preset</span>
+          <select id="eqPreset" class="eq-select"></select>
+        </label>
+        <label class="eq-field" id="audioOutputRow" hidden>
+          <span class="eq-field__label">Saída de áudio · faixas locais</span>
+          <select id="audioOutput" class="eq-select"></select>
+        </label>
+      </div>
+
+      <div id="eqBands" class="eq-bands"></div>
+
+      <div class="eq-effects">
+        <label class="eq-field">
+          <span class="eq-field__label">Bass Boost</span>
+          <input id="eqBass" class="eq-knob" type="range" min="0" max="12" step="0.5" value="0" />
+        </label>
+        <label class="eq-field">
+          <span class="eq-field__label">Ambience</span>
+          <input id="eqAmbience" class="eq-knob" type="range" min="0" max="100" step="1" value="0" />
+        </label>
+        <label class="eq-switch eq-switch--inline">
+          <input id="eqDynamic" type="checkbox" />
+          <span class="eq-switch__track"><span class="eq-switch__dot"></span></span>
+          <span class="eq-switch__label">Dynamic Boost</span>
+        </label>
+      </div>
+
+      <p class="eq-panel__note">
+        O EQ e os efeitos atuam nas faixas locais. YouTube e Spotify usam o
+        áudio próprio da plataforma. Para processá-los com o FxSound, defina o
+        dispositivo do FxSound como saída padrão do Windows — escolha-o acima
+        para rotear também a reprodução local.
+      </p>
+    </aside>
+
+    <!-- Seletor de temas lo-fi -->
+    <dialog id="themeDialog" class="dialog">
+      <form method="dialog" class="dialog__body">
+        <h2 class="dialog__title">Temas lo-fi</h2>
+        <div id="themeGrid" class="theme-grid"></div>
+        <div class="dialog__actions">
+          <button value="cancel" class="pill">Fechar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Busca do YouTube -->
+    <dialog id="youtubeDialog" class="dialog dialog--wide">
+      <div class="dialog__body">
+        <h2 class="dialog__title">YouTube</h2>
+        <details id="ytKeyBox" class="yt-key">
+          <summary>Configurar API key</summary>
+          <p class="dialog__text">
+            Gere uma <strong>YouTube Data API v3 key</strong> no
+            <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">Google Cloud Console</a>
+            e cole abaixo. É salva apenas neste navegador.
+          </p>
+          <input id="ytApiKey" class="dialog__input" type="text" placeholder="API key" autocomplete="off" spellcheck="false" />
+        </details>
+
+        <form id="ytSearchForm" class="yt-search">
+          <input id="ytQuery" class="dialog__input" type="search" placeholder="Buscar música, artista, lofi mix…" autocomplete="off" />
+          <button class="pill pill--youtube" type="submit">Buscar</button>
+        </form>
+
+        <div id="ytStatus" class="yt-status" role="status"></div>
+        <ol id="ytResults" class="yt-results"></ol>
+
+        <div class="dialog__actions">
+          <button id="ytCloseBtn" class="pill" type="button">Fechar</button>
+        </div>
+      </div>
+    </dialog>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

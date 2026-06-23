@@ -10,6 +10,7 @@ Player de música imersivo e reativo ao áudio, construído com **TypeScript** e
 
 - **Identidade de toca-discos** — vinil girante com sulcos, braço de agulha que desce ao dar play e arte do álbum como rótulo central.
 - **Visualizador de áudio ao vivo** — espectro circular de frequências desenhado em canvas, lido diretamente de um `AnalyserNode` da Web Audio API.
+- **Identificador de frequência automático** — anel de 12 classes de altura ao redor do vinil que acende conforme o áudio, com a **tonalidade estimada** (perfis de Krumhansl) e a **nota dominante** em tempo real, reativo ao volume. Implementado em [src/frequency-identifier.ts](src/frequency-identifier.ts).
 - **Tematização dinâmica** — as cores de destaque e do fundo são extraídas no dispositivo a partir de cada capa, então cada faixa tem uma identidade visual própria.
 - **Equalizador estilo FxSound** — EQ gráfico de 10 bandas + Bass Boost, Ambience (reverb) e Dynamic Boost, todos construídos sobre nós nativos da Web Audio API.
 - **Temas lo-fi** — presets de fundo estético (Lo-Fi Dusk, Vaporwave, Midnight Study, Forest Tape, Sunset Cassette, Mono Noir) ou modo Auto que extrai as cores da capa.
@@ -151,6 +152,7 @@ src/
 ├── audio-engine.ts   # motor Web Audio: HTMLAudio + EQ + grafo de nós + AnalyserNode
 ├── equalizer.ts      # EQ de 10 bandas + bass boost / ambience / dynamic (FxSound)
 ├── visualizer.ts     # espectro circular em canvas (requestAnimationFrame)
+├── frequency-identifier.ts # croma + tom/escala (Krumhansl) + nota + nível
 ├── color.ts          # extração de paleta de cores a partir da capa (no dispositivo)
 ├── media-session.ts  # ponte com controles de mídia do SO (MediaSession API)
 ├── spotify.ts        # autenticação PKCE + Web Playback SDK

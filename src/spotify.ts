@@ -49,6 +49,14 @@ export interface SpotifyState {
   duration: number;  // em milissegundos
 }
 
+/** Resultado de busca de álbum, normalizado para a interface. */
+export interface SpotifyAlbum {
+  uri: string;
+  name: string;
+  artist: string;
+  cover: string;
+}
+
 export class SpotifyController {
   private token: StoredToken | null = null;
   private player: Spotify.Player | null = null;
@@ -268,6 +276,48 @@ export class SpotifyController {
         },
       );
     }
+  }
+
+  // --- busca de álbuns --------------------------------------------------------
+
+  /** Busca álbuns pelo nome via Web API. Requer sessão autenticada. */
+  async searchAlbums(query: string): Promise<SpotifyAlbum[]> {
+    await this.ensureFreshToken();
+    if (!this.token) throw new Error("Conecte o Spotify primeiro.");
+    const params = new URLSearchParams({ q: query, type: "album", limit: "12" });
+    const res = await fetch(`https://api.spotify.com/v1/search?${params}`, {
+      headers: { Authorization: `Bearer ${this.token.access_token}` },
+    });
+    if (!res.ok) throw new Error(`Busca de álbuns falhou (HTTP ${res.status}).`);
+    const data = await res.json();
+    interface RawAlbum {
+      uri: string;
+      name: string;
+      artists: { name: string }[];
+      images: { url: string }[];
+    }
+    return (data.albums?.items ?? []).map((a: RawAlbum) => ({
+      uri: a.uri,
+      name: a.name,
+      artist: a.artists.map((x) => x.name).join(", "),
+      cover: a.images[0]?.url ?? "",
+    }));
+  }
+
+  /** Inicia a reprodução de um álbum inteiro neste dispositivo. */
+  async playAlbum(uri: string): Promise<void> {
+    if (!this.deviceId || !this.token) return;
+    await fetch(
+      `https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${this.token.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ context_uri: uri }),
+      },
+    );
   }
 
   // --- controles de transporte -----------------------------------------------

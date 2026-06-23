@@ -14,11 +14,16 @@ import type { RepeatMode, Track } from "./types";
 import { defaultTracks } from "./playlist";
 import { AudioEngine } from "./audio-engine";
 import { Visualizer } from "./visualizer";
+import { FrequencyIdentifier } from "./frequency-identifier";
+import type { FreqReading } from "./frequency-identifier";
 import { MediaSessionBridge } from "./media-session";
 import { extractPalette } from "./color";
 import { SpotifyController } from "./spotify";
 import { YouTubeController } from "./youtube";
 import type { YouTubeResult } from "./youtube";
+import type { SpotifyAlbum } from "./spotify";
+import { Metronome, TempoEstimator } from "./metronome";
+import { Zone } from "./zone";
 import { EQ_FREQUENCIES, EQ_LABELS, EQ_PRESETS } from "./equalizer";
 import { THEMES, applyTheme as applyThemePreset, savedThemeId, themeById } from "./themes";
 
@@ -54,6 +59,7 @@ const ui = {
   volume:        $<HTMLInputElement>("volume"),
   crate:         $("crate"),                           // gaveta lateral da fila
   crateBtn:      $<HTMLButtonElement>("crateBtn"),     // botão que abre a gaveta
+  crateClose:    $<HTMLButtonElement>("crateClose"),   // botão que fecha a gaveta
   crateList:     $<HTMLOListElement>("crateList"),     // lista de faixas na gaveta
   dropzone:      $("dropzone"),                        // overlay de drag-and-drop
   loadBtn:       $<HTMLButtonElement>("loadBtn"),      // botão "Load track"
@@ -62,6 +68,10 @@ const ui = {
   spotifyDialog: $<HTMLDialogElement>("spotifyDialog"),
   clientIdInput: $<HTMLInputElement>("clientIdInput"),
   viz:           $<HTMLCanvasElement>("viz"),          // canvas do visualizador
+  chromaRing:    $("chromaRing"),                      // anel de 12 classes de altura
+  freqReadout:   $("freqReadout"),                     // leitura de tom/nota
+  freqKey:       $("freqKey"),                          // tonalidade estimada
+  freqNote:      $("freqNote"),                         // nota dominante + Hz
 
   // --- Equalizador (estilo FxSound) ---
   eqBtn:         $<HTMLButtonElement>("eqBtn"),
@@ -83,6 +93,17 @@ const ui = {
   themeGrid:     $("themeGrid"),
 
   // --- YouTube ---
+  zoneBtn:       $<HTMLButtonElement>("zoneBtn"),
+
+  // --- Álbuns do Spotify ---
+  spotifyAlbumsDialog: $<HTMLDialogElement>("spotifyAlbumsDialog"),
+  albumSearchForm:     $<HTMLFormElement>("albumSearchForm"),
+  albumQuery:          $<HTMLInputElement>("albumQuery"),
+  albumStatus:         $("albumStatus"),
+  albumResults:        $<HTMLOListElement>("albumResults"),
+  spotifyDisconnect:   $<HTMLButtonElement>("spotifyDisconnect"),
+  albumCloseBtn:       $<HTMLButtonElement>("albumCloseBtn"),
+
   youtubeBtn:    $<HTMLButtonElement>("youtubeBtn"),
   youtubeDialog: $<HTMLDialogElement>("youtubeDialog"),
   ytApiKey:      $<HTMLInputElement>("ytApiKey"),
@@ -127,11 +148,84 @@ const visualizer = new Visualizer(
   () => mode === "local" && engine.playing,          // ativo apenas no modo local
 );
 
+// Estimador de andamento — alimentado pelo nível de graves a ~60fps.
+const tempoEstimator = new TempoEstimator();
+
 // Propaga o nível de graves como variável CSS para o efeito de "respiro" do fundo.
 visualizer.onBass = (level) => {
   document.documentElement.style.setProperty("--bass", level.toFixed(3));
+  if (mode === "local" && engine.playing) tempoEstimator.push(level);
 };
 visualizer.start();
+
+// =============================================================================
+// Identificador de frequência — tom/escala + nota + nível, reativo ao áudio
+// =============================================================================
+
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+const identifier = new FrequencyIdentifier(
+  () => engine.pitchSpectrum(),
+  () => engine.sampleRate,
+  () => engine.pitchFftSize,
+  () => mode === "local" && engine.playing, // só analisa áudio local
+);
+
+// Metrônomo + aba Zone (modo para músicos).
+const metronome = new Metronome();
+const zone = new Zone({
+  metronome,
+  onTranspose: (semitones) => engine.setTranspose(semitones),
+  getAutoBpm: () => tempoEstimator.estimate(),
+});
+
+/** Cria os 12 rótulos de classe de altura distribuídos em círculo ao redor do vinil. */
+function buildChromaRing(): void {
+  const radius = 46; // % do raio da viz-wrap — logo além das barras do espectro
+  ui.chromaRing.replaceChildren(
+    ...NOTE_NAMES.map((name, i) => {
+      const span = document.createElement("span");
+      span.className = "chroma-ring__note";
+      span.dataset.pc = String(i);
+      span.textContent = name;
+      // Começa no topo (−90°) e gira no sentido horário.
+      const angle = (i / 12) * Math.PI * 2 - Math.PI / 2;
+      span.style.left = `${50 + radius * Math.cos(angle)}%`;
+      span.style.top = `${50 + radius * Math.sin(angle)}%`;
+      return span;
+    }),
+  );
+  chromaEls = Array.from(
+    ui.chromaRing.querySelectorAll<HTMLSpanElement>(".chroma-ring__note"),
+  );
+}
+
+let chromaEls: HTMLSpanElement[] = [];
+
+// Atualiza o anel, a tonalidade e a nota a cada leitura do identificador.
+identifier.onUpdate = (r: FreqReading) => {
+  // Índice da classe de altura dominante (para destacar no anel).
+  const dominantPc = r.active && r.note !== "—" ? NOTE_NAMES.indexOf(r.note.replace(/-?\d+$/, "")) : -1;
+
+  chromaEls.forEach((el, i) => {
+    const lit = r.chroma[i] ?? 0;
+    el.style.setProperty("--lit", (0.25 + lit * 0.75).toFixed(3));
+    el.classList.toggle("is-dominant", i === dominantPc);
+  });
+
+  ui.freqReadout.style.setProperty("--level", r.level.toFixed(3));
+  ui.freqReadout.classList.toggle("is-idle", !r.active);
+
+  // Alimenta a aba Zone com o acorde detectado.
+  zone.setDetectedChord(r.active ? r.chord : null);
+
+  // Só atualiza o texto quando há sinal — evita "piscar" no silêncio.
+  if (r.active) {
+    if (r.confidence > 0.1) ui.freqKey.textContent = r.key;
+    ui.freqNote.textContent = r.note !== "—" ? `♪ ${r.note} · ${r.freq} Hz` : "♪ —";
+  }
+};
+identifier.start();
 
 // =============================================================================
 // Controles de mídia do SO (MediaSession API)
@@ -427,6 +521,7 @@ document.addEventListener("keydown", (e) => {
     ui.play.click();
   } else if (e.code === "ArrowRight" && e.shiftKey) next();
   else if (e.code === "ArrowLeft"  && e.shiftKey) previous();
+  else if (e.key === "Escape") closeCrate();
 });
 
 // =============================================================================
@@ -463,6 +558,13 @@ ui.crateBtn.addEventListener("click", () => {
   const open = ui.crate.classList.toggle("is-open");
   ui.crateBtn.setAttribute("aria-expanded", String(open));
 });
+
+/** Fecha a gaveta (botão ✕ e tecla Escape). */
+function closeCrate(): void {
+  ui.crate.classList.remove("is-open");
+  ui.crateBtn.setAttribute("aria-expanded", "false");
+}
+ui.crateClose.addEventListener("click", closeCrate);
 
 // =============================================================================
 // Carregamento de arquivos do dispositivo
@@ -583,16 +685,72 @@ spotify.onReady = () => {
 
 ui.spotifyBtn.addEventListener("click", () => {
   if (spotify.isAuthenticated) {
-    // Clique quando já conectado = desconectar e voltar ao modo local.
-    spotify.logout();
-    mode = "local";
-    void refreshSpotifyButton();
-    void loadTrack(index);
+    // Já conectado → abre a busca de álbuns.
+    ui.albumStatus.textContent = "";
+    ui.spotifyAlbumsDialog.showModal();
     return;
   }
   ui.clientIdInput.value = spotify.clientId;
   ui.spotifyDialog.showModal();
 });
+
+// --- Álbuns do Spotify -------------------------------------------------------
+
+ui.albumCloseBtn.addEventListener("click", () => ui.spotifyAlbumsDialog.close());
+
+ui.spotifyDisconnect.addEventListener("click", () => {
+  spotify.logout();
+  mode = "local";
+  ui.spotifyAlbumsDialog.close();
+  void refreshSpotifyButton();
+  void loadTrack(index);
+});
+
+ui.albumSearchForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  void runAlbumSearch();
+});
+
+/** Busca álbuns e renderiza os resultados no diálogo. */
+async function runAlbumSearch(): Promise<void> {
+  const query = ui.albumQuery.value.trim();
+  if (!query) return;
+  ui.albumStatus.textContent = "Buscando…";
+  ui.albumResults.replaceChildren();
+  try {
+    const albums = await spotify.searchAlbums(query);
+    ui.albumStatus.textContent = albums.length ? `${albums.length} álbuns` : "Nenhum álbum.";
+    renderAlbumResults(albums);
+  } catch (err) {
+    ui.albumStatus.textContent = err instanceof Error ? err.message : "Falha na busca.";
+  }
+}
+
+/** Renderiza cada álbum como item clicável que inicia a reprodução. */
+function renderAlbumResults(albums: SpotifyAlbum[]): void {
+  ui.albumResults.replaceChildren(
+    ...albums.map((a) => {
+      const li = document.createElement("li");
+      li.className = "yt-result";
+      li.innerHTML = `
+        <img class="yt-result__thumb" src="${a.cover}" alt="" loading="lazy" />
+        <span class="yt-result__meta">
+          <span class="yt-result__title">${escapeHtml(a.name)}</span>
+          <span class="yt-result__channel">${escapeHtml(a.artist)}</span>
+        </span>`;
+      li.addEventListener("click", () => {
+        mode = "spotify";
+        void spotify.playAlbum(a.uri);
+        ui.spotifyAlbumsDialog.close();
+      });
+      return li;
+    }),
+  );
+}
+
+// --- Aba Zone ----------------------------------------------------------------
+
+ui.zoneBtn.addEventListener("click", () => zone.toggle());
 
 ui.spotifyDialog.addEventListener("close", () => {
   if (ui.spotifyDialog.returnValue !== "default") return; // cancelado
@@ -906,6 +1064,7 @@ ui.themeBtn.addEventListener("click", () => ui.themeDialog.showModal());
 async function boot(): Promise<void> {
   buildEqUI();
   buildThemeGrid();
+  buildChromaRing();
 
   // Restaura o tema salvo antes de carregar a faixa (afeta a tematização).
   const savedTheme = themeById(savedThemeId());

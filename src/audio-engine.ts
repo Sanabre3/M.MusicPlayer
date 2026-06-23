@@ -37,6 +37,9 @@ export class AudioEngine {
   readonly element: HTMLAudioElement;
   private ctx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
+  /** Analisador de alta resolução, dedicado à detecção de pitch/tonalidade. */
+  private pitchAnalyser: AnalyserNode | null = null;
+  private pitchData: Float32Array<ArrayBuffer> = new Float32Array(0);
   private gain: GainNode | null = null;
   private eq: Equalizer | null = null;
   /** Ajustes do EQ — fonte da verdade enquanto o grafo ainda não existe. */
@@ -77,17 +80,27 @@ export class AudioEngine {
     // smoothingTimeConstant suaviza variações bruscas entre frames do visualizador.
     analyser.smoothingTimeConstant = 0.82;
 
+    // Analisador separado de alta resolução (FFT 8192) para identificar notas/tom.
+    // Resolução ≈ 5,4 Hz por bin a 44,1 kHz — suficiente para mapear classes de altura.
+    const pitchAnalyser = ctx.createAnalyser();
+    pitchAnalyser.fftSize = 8192;
+    pitchAnalyser.smoothingTimeConstant = 0.7;
+
     // source → Equalizer → gain → analyser → destino
+    // O pitchAnalyser é apenas um "tap" no gain — não precisa chegar ao destino.
     source.connect(eq.input);
     eq.output.connect(gain);
     gain.connect(analyser);
+    gain.connect(pitchAnalyser);
     analyser.connect(ctx.destination);
 
     this.ctx = ctx;
     this.eq = eq;
     this.gain = gain;
     this.analyser = analyser;
+    this.pitchAnalyser = pitchAnalyser;
     this.freqData = new Uint8Array(analyser.frequencyBinCount);
+    this.pitchData = new Float32Array(pitchAnalyser.frequencyBinCount);
 
     // Aplica a saída de áudio escolhida assim que o contexto existe.
     if (this.sinkId) void this.applySink();
@@ -131,6 +144,24 @@ export class AudioEngine {
     if (Number.isFinite(this.element.duration)) {
       this.seek(fraction * this.element.duration);
     }
+  }
+
+  /**
+   * Transpõe o áudio local por `semitones` alterando o playbackRate.
+   * preservesPitch = false faz o navegador mudar o tom (e, junto, o andamento).
+   * Não tem efeito em fontes externas (YouTube/Spotify).
+   */
+  setTranspose(semitones: number): void {
+    const rate = Math.pow(2, semitones / 12);
+    const el = this.element as HTMLAudioElement & {
+      preservesPitch?: boolean;
+      mozPreservesPitch?: boolean;
+      webkitPreservesPitch?: boolean;
+    };
+    el.preservesPitch = false;
+    el.mozPreservesPitch = false;
+    el.webkitPreservesPitch = false;
+    el.playbackRate = rate;
   }
 
   /** Define o volume (0..1) no elemento e no nó de ganho do grafo. */
@@ -228,6 +259,25 @@ export class AudioEngine {
   spectrum(): Uint8Array {
     if (this.analyser) this.analyser.getByteFrequencyData(this.freqData);
     return this.freqData;
+  }
+
+  /**
+   * Lê o espectro de alta resolução (valores em dB) do analisador de pitch.
+   * Retorna o buffer interno reutilizado — usado pelo identificador de frequência.
+   */
+  pitchSpectrum(): Float32Array {
+    if (this.pitchAnalyser) this.pitchAnalyser.getFloatFrequencyData(this.pitchData);
+    return this.pitchData;
+  }
+
+  /** Taxa de amostragem do contexto (Hz) — necessária para mapear bins em frequências. */
+  get sampleRate(): number {
+    return this.ctx?.sampleRate ?? 44100;
+  }
+
+  /** Tamanho da FFT do analisador de pitch — usado no cálculo bin → frequência. */
+  get pitchFftSize(): number {
+    return this.pitchAnalyser?.fftSize ?? 8192;
   }
 
   /** Retorna uma fotografia instantânea do estado atual de reprodução. */

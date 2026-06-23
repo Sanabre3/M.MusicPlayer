@@ -63,6 +63,14 @@
         >
           🎨 Tema
         </button>
+        <button
+          id="zoneBtn"
+          class="pill pill--zone"
+          type="button"
+          title="Zone — modo para músicos"
+        >
+          🎸 Zone
+        </button>
         <button id="spotifyBtn" class="pill pill--spotify" type="button">
           Connect Spotify
         </button>
@@ -82,6 +90,11 @@
             <span class="tonearm__pivot"></span>
             <span class="tonearm__rod"></span>
             <span class="tonearm__head"></span>
+          </div>
+          <div id="chromaRing" class="chroma-ring" aria-hidden="true"></div>
+          <div id="freqReadout" class="freq-readout">
+            <span id="freqKey" class="freq-readout__key">—</span>
+            <span id="freqNote" class="freq-readout__note">♪ —</span>
           </div>
         </div>
         <button
@@ -177,7 +190,17 @@
     </button>
 
     <aside id="crate" class="crate" aria-label="Playlist">
-      <h2 class="crate__heading">The Crate</h2>
+      <header class="crate__head">
+        <h2 class="crate__heading">The Crate</h2>
+        <button
+          id="crateClose"
+          class="crate__close"
+          type="button"
+          aria-label="Fechar o crate"
+        >
+          ✕
+        </button>
+      </header>
       <ol id="crateList" class="crate__list"></ol>
       <p class="crate__hint">Drop audio files anywhere to add them.</p>
     </aside>
@@ -307,6 +330,88 @@
 
         <div class="dialog__actions">
           <button id="ytCloseBtn" class="pill" type="button">Fechar</button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Aba Zone — modo para músicos -->
+    <section id="zone" class="zone" aria-label="Zone — modo para músicos" hidden>
+      <header class="zone__head">
+        <h2 class="zone__title">Zone <span class="zone__sub">· para músicos</span></h2>
+        <button id="zoneClose" class="zone__close" type="button" aria-label="Fechar Zone">✕</button>
+      </header>
+
+      <div class="zone__grid">
+        <div class="zone__main">
+          <div class="zone-chordbar">
+            <div class="zone-chord">
+              <span id="zoneChord" class="zone-chord__label">—</span>
+              <span id="zoneChordSrc" class="zone-chord__src">aguardando áudio…</span>
+            </div>
+            <div class="zone-transpose">
+              <span class="zone-field__label">Tom</span>
+              <button id="zoneTransDown" class="zone-step" type="button" aria-label="Descer meio-tom">−</button>
+              <span id="zoneTransVal" class="zone-trans__val">0</span>
+              <button id="zoneTransUp" class="zone-step" type="button" aria-label="Subir meio-tom">+</button>
+            </div>
+          </div>
+
+          <div class="zone-instruments" role="tablist">
+            <button class="zone-inst is-active" type="button" data-inst="violao">Violão</button>
+            <button class="zone-inst" type="button" data-inst="guitarra">Guitarra</button>
+            <button class="zone-inst" type="button" data-inst="teclado">Teclado</button>
+            <button class="zone-inst" type="button" data-inst="baixo">Baixo</button>
+            <button class="zone-inst" type="button" data-inst="bateria">Bateria</button>
+          </div>
+
+          <div id="zoneDiagram" class="zone-diagram"></div>
+        </div>
+
+        <aside class="zone__side">
+          <div class="zone-card zone-metro">
+            <h3 class="zone-card__title">Metrônomo</h3>
+            <div class="zone-metro__bpm">
+              <button id="metroDown" class="zone-step" type="button" aria-label="−1 BPM">−</button>
+              <input id="metroBpm" type="number" min="30" max="300" value="100" aria-label="BPM" />
+              <span class="zone-metro__unit">BPM</span>
+              <button id="metroUp" class="zone-step" type="button" aria-label="+1 BPM">+</button>
+            </div>
+            <div id="metroBeats" class="zone-metro__beats" aria-hidden="true"></div>
+            <div class="zone-metro__actions">
+              <button id="metroToggle" class="pill" type="button">▶ Iniciar</button>
+              <button id="metroTap" class="pill" type="button">Tap</button>
+              <button id="metroAuto" class="pill" type="button">Auto</button>
+            </div>
+            <p id="metroHint" class="zone-metro__hint"></p>
+          </div>
+
+          <div class="zone-card zone-cifra">
+            <h3 class="zone-card__title">Cifra manual</h3>
+            <textarea
+              id="cifraInput"
+              class="zone-cifra__input"
+              placeholder="Cole os acordes: C  G  Am  F …  (clique em um acorde para ver o diagrama)"
+              spellcheck="false"
+            ></textarea>
+            <div id="cifraOut" class="zone-cifra__out"></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Busca de álbuns do Spotify -->
+    <dialog id="spotifyAlbumsDialog" class="dialog dialog--wide">
+      <div class="dialog__body">
+        <h2 class="dialog__title">Álbuns do Spotify</h2>
+        <form id="albumSearchForm" class="yt-search">
+          <input id="albumQuery" class="dialog__input" type="search" placeholder="Buscar álbum ou artista…" autocomplete="off" />
+          <button class="pill pill--spotify" type="submit">Buscar</button>
+        </form>
+        <div id="albumStatus" class="yt-status" role="status"></div>
+        <ol id="albumResults" class="yt-results"></ol>
+        <div class="dialog__actions">
+          <button id="spotifyDisconnect" class="pill" type="button">Desconectar</button>
+          <button id="albumCloseBtn" class="pill" type="button">Fechar</button>
         </div>
       </div>
     </dialog>

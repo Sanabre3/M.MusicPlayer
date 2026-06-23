@@ -173,6 +173,64 @@ body {
   height: 100%;
 }
 
+/* --- frequency identifier (chroma ring + key/note readout) ---------------- */
+.chroma-ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.chroma-ring__note {
+  position: absolute;
+  transform: translate(-50%, -50%) scale(var(--lit, 0.6));
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: var(--accent);
+  opacity: var(--lit, 0.25);
+  text-shadow: 0 0 calc(6px * var(--lit, 0)) var(--accent);
+  transition: opacity 0.09s linear, transform 0.09s linear;
+  will-change: opacity, transform;
+}
+.chroma-ring__note.is-dominant {
+  color: var(--text);
+  opacity: 1;
+  text-shadow: 0 0 10px var(--accent);
+}
+
+.freq-readout {
+  position: absolute;
+  left: 50%;
+  bottom: -1.4rem;
+  transform: translateX(-50%) scale(calc(1 + var(--level, 0) * 0.12));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  text-align: center;
+  pointer-events: none;
+  z-index: 3;
+  transition: transform 0.12s ease, opacity 0.3s ease;
+}
+.freq-readout.is-idle {
+  opacity: 0.35;
+}
+.freq-readout__key {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  text-shadow: 0 0 calc(12px * var(--level, 0)) var(--accent);
+}
+.freq-readout__note {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
 /* --- the record ----------------------------------------------------------- */
 .vinyl {
   position: relative;
@@ -480,11 +538,34 @@ body {
 .crate.is-open {
   transform: translateX(0);
 }
+.crate__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+}
 .crate__heading {
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 1.4rem;
-  margin: 0 0 1.2rem;
+  margin: 0;
+}
+.crate__close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.crate__close:hover {
+  background: var(--glass);
+  color: var(--text);
 }
 .crate__list {
   list-style: none;
@@ -1039,6 +1120,420 @@ body.is-video .video-stage::after {
 .yt-result__channel {
   font-size: 0.76rem;
   color: var(--muted);
+}
+
+/* --- Zone (modo para músicos) --------------------------------------------- */
+.pill--zone .pill__glyph,
+.pill--zone {
+  position: relative;
+}
+.zone {
+  position: fixed;
+  inset: 0;
+  z-index: 14;
+  overflow-y: auto;
+  padding: clamp(1rem, 4vw, 2.5rem);
+  background: color-mix(in oklab, var(--ground) 92%, black);
+  backdrop-filter: blur(24px);
+  animation: zone-in 0.32s ease;
+}
+@keyframes zone-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+.zone__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.4rem;
+}
+.zone__title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  margin: 0;
+}
+.zone__sub {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 0.6em;
+}
+.zone__close {
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+}
+.zone__close:hover {
+  border-color: var(--accent);
+}
+.zone__grid {
+  display: grid;
+  grid-template-columns: 1.4fr 0.9fr;
+  gap: clamp(1rem, 3vw, 2rem);
+  align-items: start;
+  max-width: 70rem;
+  margin: 0 auto;
+}
+@media (max-width: 860px) {
+  .zone__grid { grid-template-columns: 1fr; }
+}
+
+/* barra do acorde atual + transpose */
+.zone-chordbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.2rem;
+}
+.zone-chord {
+  display: flex;
+  flex-direction: column;
+}
+.zone-chord__label {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(2.4rem, 7vw, 3.6rem);
+  line-height: 1;
+  color: var(--accent);
+  text-shadow: 0 0 24px color-mix(in oklab, var(--accent) 40%, transparent);
+}
+.zone-chord__src {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.zone-transpose {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.zone-field__label {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 0.3rem;
+}
+.zone-step {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: 1px solid var(--glass-line);
+  background: var(--glass);
+  color: var(--text);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.zone-step:hover {
+  border-color: var(--accent);
+}
+.zone-trans__val {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  min-width: 2.2rem;
+  text-align: center;
+  font-size: 1rem;
+}
+
+/* tabs de instrumento */
+.zone-instruments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.2rem;
+}
+.zone-inst {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.84rem;
+  color: var(--muted);
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.zone-inst:hover {
+  color: var(--text);
+}
+.zone-inst.is-active {
+  color: var(--ground);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* área do diagrama */
+.zone-diagram {
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 1.1rem;
+  padding: clamp(1rem, 3vw, 1.8rem);
+  min-height: 14rem;
+  display: grid;
+  place-items: center;
+}
+.zone-diagram__empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* fretboard (violão / guitarra / baixo) */
+.fretboard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  max-width: 26rem;
+}
+.fb-row {
+  display: grid;
+  grid-template-columns: 2.2rem 1.2rem repeat(var(--frets, 5), 1fr);
+  align-items: center;
+  gap: 0;
+}
+.fb-string {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--muted);
+  text-align: right;
+  padding-right: 0.4rem;
+}
+.fb-mark {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  text-align: center;
+  color: var(--muted);
+}
+.fb-cell {
+  position: relative;
+  height: 1.9rem;
+  border-left: 1px solid var(--glass-line);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.fb-cell:last-child {
+  border-right: 1px solid var(--glass-line);
+}
+.fb-dot {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: var(--text);
+  transform: translate(-50%, -50%);
+}
+.fb-dot.is-root {
+  background: var(--accent);
+  box-shadow: 0 0 12px color-mix(in oklab, var(--accent) 60%, transparent);
+}
+.fb-fretnums {
+  display: grid;
+  grid-template-columns: 2.2rem 1.2rem repeat(var(--frets, 5), 1fr);
+  margin-top: 0.2rem;
+}
+.fb-fretnum {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* piano */
+.piano {
+  position: relative;
+  display: flex;
+  height: 9rem;
+  width: 100%;
+  max-width: 26rem;
+  user-select: none;
+}
+.pk-white {
+  flex: 1;
+  border: 1px solid #0008;
+  border-radius: 0 0 0.3rem 0.3rem;
+  background: #f4efe6;
+  position: relative;
+  z-index: 1;
+}
+.pk-white.is-lit {
+  background: color-mix(in oklab, var(--accent) 55%, #f4efe6);
+}
+.pk-white.is-root {
+  background: var(--accent);
+}
+.pk-black {
+  position: absolute;
+  top: 0;
+  width: 5.4%;
+  height: 60%;
+  background: #1a1620;
+  border-radius: 0 0 0.25rem 0.25rem;
+  z-index: 2;
+  transform: translateX(-50%);
+}
+.pk-black.is-lit {
+  background: color-mix(in oklab, var(--accent) 70%, #1a1620);
+}
+.pk-black.is-root {
+  background: var(--accent);
+}
+
+/* bateria (groove seguindo o metrônomo) */
+.drums {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  max-width: 28rem;
+}
+.dr-row {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  align-items: center;
+  gap: 0.6rem;
+}
+.dr-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: right;
+}
+.dr-cells {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 0.25rem;
+}
+.dr-cell {
+  height: 1.5rem;
+  border-radius: 0.3rem;
+  background: rgba(255, 255, 255, 0.07);
+}
+.dr-cell.is-hit {
+  background: color-mix(in oklab, var(--accent) 55%, transparent);
+}
+.dr-cell.is-now {
+  outline: 2px solid var(--text);
+}
+.drums__hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin: 0.4rem 0 0;
+}
+
+/* cards laterais (metrônomo / cifra) */
+.zone-card {
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 1.1rem;
+  padding: 1.1rem 1.2rem;
+  margin-bottom: 1rem;
+}
+.zone-card__title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.05rem;
+  margin: 0 0 0.9rem;
+}
+.zone-metro__bpm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+.zone-metro__bpm input {
+  width: 4.5rem;
+  font-family: var(--font-mono);
+  font-size: 1.2rem;
+  text-align: center;
+  color: var(--text);
+  background: var(--ground);
+  border: 1px solid var(--glass-line);
+  border-radius: 0.6rem;
+  padding: 0.35rem;
+}
+.zone-metro__unit {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.zone-metro__beats {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+.metro-beat {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  transition: transform 0.08s ease, background 0.08s ease;
+}
+.metro-beat.is-now {
+  background: var(--accent);
+  transform: scale(1.4);
+  box-shadow: 0 0 12px var(--accent);
+}
+.metro-beat.is-downbeat.is-now {
+  background: var(--text);
+  box-shadow: 0 0 12px var(--text);
+}
+.zone-metro__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.zone-metro__hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin: 0.7rem 0 0;
+  min-height: 1rem;
+}
+.zone-cifra__input {
+  width: 100%;
+  min-height: 6rem;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--ground);
+  border: 1px solid var(--glass-line);
+  border-radius: 0.7rem;
+  padding: 0.7rem;
+  margin-bottom: 0.8rem;
+}
+.zone-cifra__out {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.cifra-chord {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+}
+.cifra-chord:hover,
+.cifra-chord.is-active {
+  background: var(--accent);
+  color: var(--ground);
 }
 
 /* --- animations ----------------------------------------------------------- */

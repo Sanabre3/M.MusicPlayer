@@ -26,7 +26,12 @@
         Zone<span class="wordmark__thin">Player</span>
       </div>
       <div class="topbar__actions">
-        <button id="loadBtn" class="pill" type="button" title="Play a file from this device">
+        <button
+          id="loadBtn"
+          class="pill"
+          type="button"
+          title="Play a file from this device"
+        >
           <span class="pill__glyph">＋</span> Load track
         </button>
         <button id="spotifyBtn" class="pill pill--spotify" type="button">
@@ -59,8 +64,16 @@
 
         <div class="scrubber">
           <span class="timecode" id="elapsed">0:00</span>
-          <div class="track" id="track" role="slider" aria-label="Seek"
-               aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+          <div
+            class="track"
+            id="track"
+            role="slider"
+            aria-label="Seek"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            tabindex="0"
+          >
             <div class="track__fill" id="fill"></div>
             <div class="track__head" id="head"></div>
           </div>
@@ -68,22 +81,59 @@
         </div>
 
         <div class="controls">
-          <button id="shuffle" class="ctl ctl--toggle" type="button" title="Shuffle" aria-pressed="false">⤮</button>
-          <button id="prev" class="ctl" type="button" title="Previous">⏮</button>
-          <button id="play" class="ctl ctl--play" type="button" title="Play / Pause">▶</button>
+          <button
+            id="shuffle"
+            class="ctl ctl--toggle"
+            type="button"
+            title="Shuffle"
+            aria-pressed="false"
+          >
+            ⤮
+          </button>
+          <button id="prev" class="ctl" type="button" title="Previous">
+            ⏮
+          </button>
+          <button
+            id="play"
+            class="ctl ctl--play"
+            type="button"
+            title="Play / Pause"
+          >
+            ▶
+          </button>
           <button id="next" class="ctl" type="button" title="Next">⏭</button>
-          <button id="repeat" class="ctl ctl--toggle" type="button" title="Repeat" aria-pressed="false">↻</button>
+          <button
+            id="repeat"
+            class="ctl ctl--toggle"
+            type="button"
+            title="Repeat"
+            aria-pressed="false"
+          >
+            ↻
+          </button>
         </div>
 
         <div class="volume">
           <span class="volume__icon" aria-hidden="true">🔈</span>
-          <input id="volume" class="volume__range" type="range" min="0" max="100" value="80"
-                 aria-label="Volume" />
+          <input
+            id="volume"
+            class="volume__range"
+            type="range"
+            min="0"
+            max="100"
+            value="80"
+            aria-label="Volume"
+          />
         </div>
       </section>
     </main>
 
-    <button id="crateBtn" class="crate-toggle" type="button" aria-expanded="false">
+    <button
+      id="crateBtn"
+      class="crate-toggle"
+      type="button"
+      aria-expanded="false"
+    >
       Crate
     </button>
 
@@ -101,16 +151,31 @@
       <form method="dialog" class="dialog__body">
         <h2 class="dialog__title">Connect Spotify</h2>
         <p class="dialog__text">
-          Paste your Spotify app's <strong>Client ID</strong>. Add this page's URL
-          as a Redirect URI in the
-          <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer">developer dashboard</a>.
-          Playback requires Spotify Premium.
+          Paste your Spotify app's <strong>Client ID</strong>. Add this page's
+          URL as a Redirect URI in the
+          <a
+            href="https://developer.spotify.com/dashboard"
+            target="_blank"
+            rel="noreferrer"
+            >developer dashboard</a
+          >. Playback requires Spotify Premium.
         </p>
-        <input id="clientIdInput" class="dialog__input" type="text"
-               placeholder="Client ID" autocomplete="off" spellcheck="false" />
+        <input
+          id="clientIdInput"
+          class="dialog__input"
+          type="text"
+          placeholder="Client ID"
+          autocomplete="off"
+          spellcheck="false"
+        />
         <div class="dialog__actions">
           <button value="cancel" class="pill">Cancel</button>
-          <button id="spotifyAuth" value="default" class="pill pill--spotify" type="submit">
+          <button
+            id="spotifyAuth"
+            value="default"
+            class="pill pill--spotify"
+            type="submit"
+          >
             Authorize
           </button>
         </div>

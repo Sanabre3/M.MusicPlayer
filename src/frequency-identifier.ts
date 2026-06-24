@@ -37,6 +37,10 @@ export interface FreqReading {
   freq: number;
   /** Tonalidade estimada (ex: "C menor") ou "—". */
   key: string;
+  /** Tônica do tom estimado (0..11). */
+  keyTonic: number;
+  /** True se o tom estimado é maior; false se menor. */
+  keyMajor: boolean;
   /** Confiança da estimativa de tom (0..1). */
   confidence: number;
   /** Acorde detectado no momento (ou null em silêncio/baixa confiança). */
@@ -147,7 +151,7 @@ export class FrequencyIdentifier {
       this.chordAccum[i] = this.chordAccum[i]! * 0.6 + chromaNorm[i]! * 0.4;
     }
 
-    const { key, confidence } = this.estimateKey();
+    const { key, tonic, major, confidence } = this.estimateKey();
     const note = peakFreq > 0 ? freqToNote(peakFreq) : "—";
     const chord = level > 0.15 ? detectChord(this.chordAccum) : null;
 
@@ -156,6 +160,8 @@ export class FrequencyIdentifier {
       note,
       freq: Math.round(peakFreq),
       key,
+      keyTonic: tonic,
+      keyMajor: major,
       confidence,
       chord,
       chordLabel: chord ? chordLabel(chord) : "—",
@@ -166,7 +172,7 @@ export class FrequencyIdentifier {
   }
 
   /** Correlaciona o croma acumulado com os perfis maior/menor em 12 tônicas. */
-  private estimateKey(): { key: string; confidence: number } {
+  private estimateKey(): { key: string; tonic: number; major: boolean; confidence: number } {
     let best = { score: -Infinity, tonic: 0, major: true };
     for (let tonic = 0; tonic < 12; tonic++) {
       const major = correlate(this.keyAccum, MAJOR_PROFILE, tonic);
@@ -176,7 +182,7 @@ export class FrequencyIdentifier {
     }
     const name = NOTE_NAMES[best.tonic]!;
     const key = `${name} ${best.major ? "maior" : "menor"}`;
-    return { key, confidence: clamp01(best.score) };
+    return { key, tonic: best.tonic, major: best.major, confidence: clamp01(best.score) };
   }
 }
 
@@ -190,6 +196,8 @@ function idleReading(): FreqReading {
     note: "—",
     freq: 0,
     key: "—",
+    keyTonic: 0,
+    keyMajor: true,
     confidence: 0,
     chord: null,
     chordLabel: "—",

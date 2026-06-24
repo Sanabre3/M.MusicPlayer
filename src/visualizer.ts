@@ -73,8 +73,10 @@ export class Visualizer {
 
     const cx = w / 2;
     const cy = h / 2;
-    // Raio do anel externo do vinil — 30% da menor dimensão do canvas.
-    const radius = Math.min(w, h) * 0.3;
+    // Raio do anel — fração da menor dimensão do canvas. Mantido baixo o
+    // suficiente para que as barras (até ~2× o raio) caibam dentro do canvas
+    // sem serem cortadas pela borda do campo.
+    const radius = Math.min(w, h) * 0.21;
     const spectrum = this.getSpectrum();
     const active = this.isActive();
 
@@ -101,7 +103,7 @@ export class Visualizer {
 
       // Quando pausado, shimmer suave para o anel não ficar completamente flat.
       const value = active ? raw : 0.04 + 0.02 * Math.sin(i * 0.5);
-      const len = value * radius * 1.15; // comprimento radial da barra
+      const len = value * radius * 1.05; // comprimento radial da barra
 
       // Ângulo da barra — começa no topo (−π/2) e gira no sentido horário.
       const angle = t * Math.PI * 2 - Math.PI / 2;

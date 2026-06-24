@@ -24,6 +24,7 @@ import type { YouTubeResult } from "./youtube";
 import type { SpotifyAlbum } from "./spotify";
 import { Metronome, TempoEstimator } from "./metronome";
 import { Zone } from "./zone";
+import { Onboarding } from "./onboarding";
 import { EQ_FREQUENCIES, EQ_LABELS, EQ_PRESETS } from "./equalizer";
 import { THEMES, applyTheme as applyThemePreset, savedThemeId, themeById } from "./themes";
 
@@ -85,6 +86,8 @@ const ui = {
   eqDynamic:     $<HTMLInputElement>("eqDynamic"),
   audioOutputRow:$("audioOutputRow"),
   audioOutput:   $<HTMLSelectElement>("audioOutput"),
+  audioOutputBtn:$<HTMLButtonElement>("audioOutputBtn"),
+  audioOutputLabel: $("audioOutputLabel"),
 
   // --- Temas lo-fi ---
   themeBtn:      $<HTMLButtonElement>("themeBtn"),
@@ -92,8 +95,9 @@ const ui = {
   themeDialog:   $<HTMLDialogElement>("themeDialog"),
   themeGrid:     $("themeGrid"),
 
-  // --- YouTube ---
+  // --- Zone / Onboarding ---
   zoneBtn:       $<HTMLButtonElement>("zoneBtn"),
+  chooserBtn:    $<HTMLButtonElement>("chooserBtn"),
 
   // --- Álbuns do Spotify ---
   spotifyAlbumsDialog: $<HTMLDialogElement>("spotifyAlbumsDialog"),
@@ -179,6 +183,13 @@ const zone = new Zone({
   getAutoBpm: () => tempoEstimator.estimate(),
 });
 
+// Tela inicial de escolha de modo (apenas escutar × estudar). Reaberta pelo
+// botão "Modo" na topbar.
+const onboarding = new Onboarding({
+  onListen: () => {},
+  onStudy: () => zone.open(),
+});
+
 /** Cria os 12 rótulos de classe de altura distribuídos em círculo ao redor do vinil. */
 function buildChromaRing(): void {
   const radius = 46; // % do raio da viz-wrap — logo além das barras do espectro
@@ -216,8 +227,9 @@ identifier.onUpdate = (r: FreqReading) => {
   ui.freqReadout.style.setProperty("--level", r.level.toFixed(3));
   ui.freqReadout.classList.toggle("is-idle", !r.active);
 
-  // Alimenta a aba Zone com o acorde detectado.
+  // Alimenta a aba Zone com o acorde e o tom detectados.
   zone.setDetectedChord(r.active ? r.chord : null);
+  if (r.active && r.confidence > 0.1) zone.setDetectedKey(r.keyTonic, r.keyMajor);
 
   // Só atualiza o texto quando há sinal — evita "piscar" no silêncio.
   if (r.active) {
@@ -739,6 +751,9 @@ function renderAlbumResults(albums: SpotifyAlbum[]): void {
           <span class="yt-result__channel">${escapeHtml(a.artist)}</span>
         </span>`;
       li.addEventListener("click", () => {
+        // Silencia as outras fontes antes de transferir para o Spotify.
+        engine.pause();
+        if (mode === "youtube") youtube.pause();
         mode = "spotify";
         void spotify.playAlbum(a.uri);
         ui.spotifyAlbumsDialog.close();
@@ -751,6 +766,7 @@ function renderAlbumResults(albums: SpotifyAlbum[]): void {
 // --- Aba Zone ----------------------------------------------------------------
 
 ui.zoneBtn.addEventListener("click", () => zone.toggle());
+ui.chooserBtn.addEventListener("click", () => onboarding.show());
 
 ui.spotifyDialog.addEventListener("close", () => {
   if (ui.spotifyDialog.returnValue !== "default") return; // cancelado
@@ -907,7 +923,7 @@ function buildEqUI(): void {
       wrap.innerHTML = `
         <span class="eq-band__gain" data-i="${i}">${fmtGain(settings.bands[i] ?? 0)}</span>
         <input class="eq-band__slider" type="range" min="-12" max="12" step="0.5"
-               value="${settings.bands[i] ?? 0}" data-i="${i}"
+               value="${settings.bands[i] ?? 0}" data-i="${i}" orient="vertical"
                aria-label="${EQ_LABELS[i]} Hz" />
         <span class="eq-band__freq">${EQ_LABELS[i]}</span>`;
       const slider = wrap.querySelector<HTMLInputElement>(".eq-band__slider")!;
@@ -971,41 +987,39 @@ ui.eqBtn.addEventListener("click", () => {
   if (open) void refreshAudioOutputs(); // atualiza a lista de saídas ao abrir
 });
 
-/** Lista os dispositivos de saída e popula o seletor (faixas locais). */
-async function refreshAudioOutputs(): Promise<void> {
-  // Esconde o seletor se o navegador não suporta escolher a saída do grafo.
-  if (!engine.supportsOutputSelection || !navigator.mediaDevices?.enumerateDevices) {
-    ui.audioOutputRow.hidden = true;
-    return;
-  }
+// A API selectAudioOutput não está nos tipos padrão do TS.
+type MediaDevicesWithSelect = MediaDevices & {
+  selectAudioOutput?: () => Promise<MediaDeviceInfo>;
+};
+
+/** Prepara a UI de saída de áudio conforme o suporte do navegador. */
+function refreshAudioOutputs(): void {
+  const md = navigator.mediaDevices as MediaDevicesWithSelect | undefined;
+  // Precisa de setSinkId (rotear o grafo) E de um seletor de dispositivo.
+  const supported = engine.supportsOutputSelection && !!md?.selectAudioOutput;
   ui.audioOutputRow.hidden = false;
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const outputs = devices.filter((d) => d.kind === "audiooutput");
-    const current = engine.outputDeviceId;
-    // "Padrão do sistema" sempre disponível como primeira opção.
-    const defaultOpt = document.createElement("option");
-    defaultOpt.value = "";
-    defaultOpt.textContent = "Padrão do sistema";
-    ui.audioOutput.replaceChildren(
-      defaultOpt,
-      ...outputs
-        .filter((d) => d.deviceId && d.deviceId !== "default")
-        .map((d, i) => {
-          const opt = document.createElement("option");
-          opt.value = d.deviceId;
-          opt.textContent = d.label || `Saída ${i + 1}`;
-          return opt;
-        }),
-    );
-    ui.audioOutput.value = current;
-  } catch (err) {
-    console.warn("Não foi possível listar saídas de áudio:", err);
+  ui.audioOutputBtn.hidden = !supported;
+  if (!supported) {
+    // Firefox e outros: a página não pode escolher a saída — instrui o usuário.
+    ui.audioOutputLabel.textContent =
+      "Seu navegador não permite escolher a saída pela página. Para usar o FxSound, defina-o como dispositivo de saída padrão do sistema — o áudio do navegador passará por ele.";
+    ui.audioOutputLabel.classList.add("eq-output__note");
   }
 }
 
-ui.audioOutput.addEventListener("change", () => {
-  void engine.setOutputDevice(ui.audioOutput.value);
+// Abre o seletor nativo de dispositivos de saída (libera rótulos + permissão).
+ui.audioOutputBtn.addEventListener("click", () => {
+  const md = navigator.mediaDevices as MediaDevicesWithSelect;
+  if (!md.selectAudioOutput) return;
+  void md
+    .selectAudioOutput()
+    .then((device) => {
+      void engine.setOutputDevice(device.deviceId);
+      ui.audioOutputLabel.textContent = device.label || "Dispositivo selecionado";
+    })
+    .catch(() => {
+      // Usuário cancelou o seletor — mantém a saída atual.
+    });
 });
 ui.eqClose.addEventListener("click", () => {
   ui.eqPanel.classList.remove("is-open");
@@ -1080,6 +1094,9 @@ async function boot(): Promise<void> {
     console.warn("Inicialização do Spotify ignorada:", err);
   }
   await refreshSpotifyButton();
+
+  // Por último: tela de escolha de modo (só na 1ª visita).
+  onboarding.maybeShow();
 }
 
 void boot();

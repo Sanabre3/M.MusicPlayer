@@ -160,7 +160,7 @@ body {
 
 .viz-wrap {
   position: relative;
-  width: min(46vh, 30rem);
+  width: min(54vh, 34rem, 92vw);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -234,7 +234,7 @@ body {
 /* --- the record ----------------------------------------------------------- */
 .vinyl {
   position: relative;
-  width: 64%;
+  width: 40%;
   aspect-ratio: 1;
   border-radius: 50%;
   background:
@@ -671,6 +671,8 @@ body {
   border-radius: 1.2rem;
   padding: 0;
   max-width: 28rem;
+  max-height: 90vh;
+  overflow-y: auto;
   background: color-mix(in oklab, var(--ground) 92%, black);
   color: var(--text);
 }
@@ -814,6 +816,8 @@ body.is-video .video-stage::after {
   transform: translate(-50%, 130%);
   z-index: 12;
   width: min(40rem, 94vw);
+  max-height: 84vh;
+  overflow-y: auto;
   padding: clamp(1.1rem, 3vw, 1.6rem);
   background: color-mix(in oklab, var(--ground) 80%, black);
   border: 1px solid var(--glass-line);
@@ -1285,6 +1289,10 @@ body.is-video .video-stage::after {
   display: grid;
   place-items: center;
 }
+/* Quando há galeria de voicings, alinha o conteúdo ao topo/início. */
+.zone-diagram:has(.voicing-gallery) {
+  place-items: start stretch;
+}
 .zone-diagram__empty {
   color: var(--muted);
   font-size: 0.9rem;
@@ -1536,6 +1544,289 @@ body.is-video .video-stage::after {
   color: var(--ground);
 }
 
+/* --- saída de áudio (painel EQ) ------------------------------------------- */
+.eq-output {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.eq-output__label {
+  display: block;
+  margin-top: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Nota explicativa (ex: Firefox) — precisa quebrar em várias linhas. */
+.eq-output__note {
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.4;
+}
+
+/* --- Zone: botão auto, navegação de voicing ------------------------------- */
+.zone-auto {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+}
+.zone-auto:hover {
+  background: var(--accent);
+  color: var(--ground);
+}
+.voicing-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-top: 0.7rem;
+}
+.voicing-nav__label {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  min-width: 6rem;
+  text-align: center;
+}
+
+/* Galeria com TODOS os modelos (voicings) do acorde. */
+.voicing-count {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin: 0 0 0.9rem;
+  width: 100%;
+  text-align: left;
+}
+.voicing-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 1.1rem;
+  width: 100%;
+  max-height: 24rem;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+.voicing-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border: 1px solid var(--glass-line);
+  border-radius: 0.8rem;
+  background: color-mix(in oklab, var(--ground) 60%, transparent);
+}
+.voicing-item__label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* --- Zone: afinação + capotraste + tablatura + exportar ------------------- */
+.zone-setup {
+  display: flex;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+.zone-setup .eq-field {
+  flex: 1;
+  min-width: 0;
+}
+.fb-capo {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  margin-bottom: 0.7rem;
+  text-align: center;
+  line-height: 1.35;
+}
+.voicing-nav {
+  flex-wrap: wrap;
+}
+.zone-tab__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+.zone-tab__head .zone-card__title {
+  margin: 0;
+}
+.zone-tab__input {
+  width: 100%;
+  min-height: 9rem;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+  color: var(--text);
+  background: var(--ground);
+  border: 1px solid var(--glass-line);
+  border-radius: 0.7rem;
+  padding: 0.7rem;
+}
+.zone-export__btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* --- Zone: campo harmônico ------------------------------------------------ */
+.zone-harmonic {
+  margin-top: 1.2rem;
+}
+.zone-harmonic__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+.zone-harmonic__head .zone-card__title {
+  margin: 0;
+}
+.zone-harmonic__follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.76rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.zone-harmonic__picker {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+.zone-harmonic__picker .eq-select {
+  flex: 1;
+}
+.zone-harmonic__chords {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(4.2rem, 1fr));
+  gap: 0.5rem;
+}
+.hf-chord {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.5rem 0.3rem;
+  border: 1px solid var(--glass-line);
+  border-radius: 0.7rem;
+  background: var(--glass);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.hf-chord:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.hf-chord__deg {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+.hf-chord__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.98rem;
+  color: var(--accent);
+}
+
+/* --- Zone: editor de letra & cifra ---------------------------------------- */
+.zone-cifra__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+.zone-cifra__head .zone-card__title {
+  margin: 0;
+}
+.cifra-doc {
+  display: block;
+  max-height: 22rem;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  line-height: 1.35;
+}
+.cf-blank {
+  height: 0.7rem;
+}
+.cf-chordline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.1rem;
+}
+.cf-chordtext {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.cf-lyricline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.1rem 0.45rem;
+  margin-bottom: 0.35rem;
+}
+.cf-word {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.cf-slot {
+  display: flex;
+  gap: 0.2rem;
+  min-height: 1.1rem;
+}
+.cf-text {
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  color: var(--text);
+  cursor: pointer;
+  border-bottom: 1px dotted transparent;
+}
+.cf-text:hover {
+  border-bottom-color: var(--muted);
+}
+.cf-chip {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.74rem;
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+  border-radius: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  cursor: pointer;
+  line-height: 1.3;
+}
+.cf-chip:hover {
+  background: var(--accent);
+  color: var(--ground);
+}
+
 /* --- animations ----------------------------------------------------------- */
 @keyframes drift {
   to {
@@ -1573,11 +1864,30 @@ body.is-video .video-stage::after {
   body {
     overflow-y: auto;
   }
+
+  /* Topbar: logo centralizada em cima, pills centralizadas embaixo. */
+  .topbar {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.8rem;
+    padding-top: 1rem;
+  }
+  .wordmark {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+  .topbar__actions {
+    flex: 1 1 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* Palco em coluna única, centralizado. */
   .stage {
     grid-template-columns: 1fr;
     text-align: center;
     gap: 2rem;
-    padding-top: 1rem;
+    padding-top: 0.5rem;
   }
   .readout {
     margin: 0 auto;
@@ -1593,6 +1903,178 @@ body.is-video .video-stage::after {
   .tonearm {
     display: none;
   }
+
+  /* Alvos de toque maiores no scrubber. */
+  .track {
+    height: 8px;
+  }
+  .track__head {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Gaveta do crate ocupa quase toda a largura. */
+  .crate {
+    width: min(26rem, 100vw);
+  }
+}
+
+@media (max-width: 560px) {
+  .wordmark {
+    font-size: 1.05rem;
+  }
+  .pill {
+    font-size: 0.74rem;
+    padding: 0.45rem 0.72rem;
+  }
+  .topbar__actions {
+    gap: 0.4rem;
+  }
+
+  /* Botão flutuante e gaveta do crate. */
+  .crate-toggle {
+    right: 1rem;
+    bottom: 1rem;
+  }
+
+  /* Equalizador: bottom sheet quase full-width, bandas compactas. */
+  .eq-panel {
+    bottom: 0.6rem;
+    width: 96vw;
+  }
+  .eq-bands {
+    gap: 0.16rem;
+  }
+  .eq-band__slider {
+    height: clamp(6rem, 26vh, 9rem);
+  }
+  .eq-band__freq {
+    font-size: 0.54rem;
+  }
+  .eq-effects {
+    gap: 0.7rem 1rem;
+  }
+
+  /* Identificador: leitura um pouco menor. */
+  .freq-readout__key {
+    font-size: 0.95rem;
+  }
+  .chroma-ring__note {
+    font-size: 0.56rem;
+  }
+
+  /* Zone: tudo mais compacto para caber bem no celular. */
+  .zone {
+    padding: 1rem 0.9rem 2.5rem;
+  }
+  .zone-chord__label {
+    font-size: clamp(2rem, 13vw, 2.8rem);
+  }
+  .zone-inst {
+    font-size: 0.78rem;
+    padding: 0.4rem 0.8rem;
+  }
+  .zone-transpose {
+    flex-wrap: wrap;
+  }
+  .fb-row {
+    grid-template-columns: 1.8rem 1rem repeat(var(--frets, 5), 1fr);
+  }
+  .fb-cell {
+    height: 1.7rem;
+  }
+  .piano {
+    height: 7.5rem;
+  }
+}
+
+/* Celular/tablet em PAISAGEM (tela girada): pouca altura, bastante largura.
+   Restaura duas colunas e comprime na vertical para caber sem rolagem longa. */
+@media (orientation: landscape) and (max-height: 560px) {
+  body {
+    overflow-y: auto;
+  }
+
+  /* Topbar volta a uma linha compacta para não consumir altura. */
+  .topbar {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    padding: 0.5rem clamp(0.8rem, 3vw, 1.5rem);
+    gap: 0.5rem;
+  }
+  .wordmark {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    font-size: 1rem;
+  }
+  .topbar__actions {
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .pill {
+    font-size: 0.72rem;
+    padding: 0.4rem 0.7rem;
+  }
+
+  /* Duas colunas: vinil à esquerda, controles à direita. */
+  .stage {
+    grid-template-columns: 0.9fr 1.1fr;
+    text-align: left;
+    gap: clamp(1rem, 4vw, 2.5rem);
+    padding: 0 clamp(1rem, 4vw, 2.5rem) 1rem;
+    align-items: center;
+  }
+  .viz-wrap {
+    width: min(74vh, 18rem);
+  }
+  .readout {
+    margin: 0;
+    max-width: none;
+  }
+  .readout__eyebrow {
+    margin-bottom: 0.3rem;
+  }
+  .readout__title {
+    font-size: clamp(1.4rem, 6vh, 2.4rem);
+    margin-bottom: 0.2rem;
+  }
+  .readout__artist {
+    margin-bottom: 0.9rem;
+  }
+  .scrubber,
+  .controls {
+    margin-bottom: 0.8rem;
+  }
+  .scrubber,
+  .controls,
+  .volume {
+    justify-content: flex-start;
+  }
+  .volume {
+    margin: 0;
+  }
+
+  /* Identificador: leitura mais discreta para não invadir os controles. */
+  .freq-readout {
+    bottom: -1rem;
+  }
+
+  /* Zone aproveita a largura em duas colunas. */
+  .zone {
+    padding: 0.8rem clamp(0.9rem, 3vw, 2rem) 1.5rem;
+  }
+  .zone__head {
+    margin-bottom: 0.8rem;
+  }
+  .zone__grid {
+    grid-template-columns: 1.3fr 0.9fr;
+  }
+
+  /* EQ como bottom sheet rolável. */
+  .eq-panel {
+    max-height: 90vh;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1604,5 +2086,396 @@ body.is-video .video-stage::after {
   }
   * {
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* =============================================================================
+   Tela inicial (onboarding) — escolha de modo
+   ============================================================================= */
+.onboard {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 4vw, 3rem);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+.onboard[hidden] {
+  display: none;
+}
+.onboard.is-in {
+  opacity: 1;
+  pointer-events: auto;
+}
+.onboard__bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(60% 60% at 18% 22%, color-mix(in oklab, var(--accent) 42%, transparent), transparent 70%),
+    radial-gradient(55% 55% at 86% 28%, color-mix(in oklab, var(--accent-2) 48%, transparent), transparent 70%),
+    radial-gradient(80% 70% at 50% 110%, color-mix(in oklab, var(--shade) 85%, transparent), transparent 72%),
+    color-mix(in oklab, var(--ground) 90%, black);
+  background-size: 200% 200%;
+  animation: onboard-drift 20s ease-in-out infinite alternate;
+  backdrop-filter: blur(10px);
+}
+@keyframes onboard-drift {
+  from { background-position: 0% 0%; }
+  to   { background-position: 100% 100%; }
+}
+.onboard__disc {
+  position: absolute;
+  width: min(84vw, 48rem);
+  aspect-ratio: 1;
+  opacity: 0.14;
+  animation: spin 34s linear infinite;
+  pointer-events: none;
+}
+.onboard__disc-grooves {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, rgba(255, 255, 255, 0.1) 0 1px, transparent 1px 7px);
+}
+.onboard__disc-core {
+  position: absolute;
+  inset: 43%;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 40px var(--accent);
+}
+.onboard__panel {
+  position: relative;
+  z-index: 1;
+  width: min(56rem, 100%);
+  text-align: center;
+  transform: translateY(16px);
+  transition: transform 0.4s ease;
+}
+.onboard.is-in .onboard__panel {
+  transform: none;
+}
+.onboard__brand {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.2rem;
+}
+.onboard__brand-thin {
+  font-weight: 500;
+  opacity: 0.6;
+}
+.onboard__dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 18px var(--accent);
+}
+.onboard__title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(1.9rem, 5vw, 3rem);
+  line-height: 1.05;
+  margin: 0 0 0.5rem;
+}
+.onboard__sub {
+  color: var(--muted);
+  font-size: clamp(0.9rem, 2vw, 1.05rem);
+  margin: 0 auto 2rem;
+  max-width: 34rem;
+}
+.onboard__cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(1rem, 3vw, 1.6rem);
+}
+@media (max-width: 680px) {
+  .onboard__cards { grid-template-columns: 1fr; }
+}
+.onboard-card {
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: clamp(1.4rem, 3vw, 2rem);
+  border: 1px solid var(--glass-line);
+  border-radius: 1.3rem;
+  background: color-mix(in oklab, var(--ground) 55%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.onboard-card:hover,
+.onboard-card:focus-visible {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.42);
+  outline: none;
+}
+.onboard-card--study:hover,
+.onboard-card--study:focus-visible {
+  border-color: var(--accent-2);
+}
+.onboard-card__glow {
+  position: absolute;
+  inset: -40% -40% auto auto;
+  width: 60%;
+  aspect-ratio: 1;
+  background: radial-gradient(circle, color-mix(in oklab, var(--accent) 50%, transparent), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.onboard-card--study .onboard-card__glow {
+  background: radial-gradient(circle, color-mix(in oklab, var(--accent-2) 55%, transparent), transparent 70%);
+}
+.onboard-card:hover .onboard-card__glow,
+.onboard-card:focus-visible .onboard-card__glow {
+  opacity: 0.5;
+}
+.onboard-card__icon {
+  font-size: 2.4rem;
+  line-height: 1;
+}
+.onboard-card__h {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.4rem;
+}
+.onboard-card__d {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.onboard-card__cta {
+  margin-top: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+.onboard-card--study .onboard-card__cta {
+  color: var(--accent-2);
+}
+.onboard__skip {
+  margin-top: 1.6rem;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.onboard__skip:hover {
+  color: var(--text);
+}
+
+/* =============================================================================
+   Editor de tablatura (grade interativa) + visual da tab na cifra
+   ============================================================================= */
+.tabed__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+.tabed__btn {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.76rem;
+  color: var(--text);
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.tabed__btn:hover {
+  border-color: var(--accent);
+}
+.tabed__texttoggle {
+  margin-left: auto;
+}
+.tabed__hint {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin: 0 0 0.6rem;
+  line-height: 1.4;
+}
+.tabed__mount {
+  outline: none;
+  border-radius: 0.6rem;
+}
+.tabed__mount:focus-within {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent);
+}
+
+/* grade compartilhada (editor + cifra read-only) */
+.tabgrid {
+  width: 100%;
+}
+.tabgrid__title {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.4rem;
+}
+.tabgrid__scroll {
+  overflow-x: auto;
+  padding-bottom: 0.3rem;
+}
+.tabgrid__grid {
+  display: grid;
+  align-items: stretch;
+  min-width: max-content;
+  background: color-mix(in oklab, var(--ground) 70%, transparent);
+  border: 1px solid var(--glass-line);
+  border-radius: 0.6rem;
+  padding: 0.3rem 0.5rem;
+}
+.tabgrid__str {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 0.45rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.72rem;
+  color: var(--accent);
+}
+.tabgrid__cell {
+  position: relative;
+  height: 2.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+.tabgrid.is-readonly .tabgrid__cell {
+  cursor: default;
+}
+/* a linha da corda atravessa cada célula (estilo tab) */
+.tabgrid__cell::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 38%;
+  height: 1px;
+  background: var(--glass-line);
+}
+.tabgrid__num {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  line-height: 1;
+  color: var(--muted);
+  background: var(--ground);
+  padding: 0 0.15rem;
+  border-radius: 0.3rem;
+  transition: color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+.tabgrid__cell.is-set .tabgrid__num {
+  color: var(--text);
+  font-weight: 700;
+}
+.tabgrid:not(.is-readonly) .tabgrid__cell:hover .tabgrid__num {
+  color: var(--text);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 35%, transparent);
+}
+.tabgrid:not(.is-readonly) .tabgrid__cell.is-active .tabgrid__num {
+  color: var(--ground);
+  background: var(--accent);
+  box-shadow: 0 0 12px color-mix(in oklab, var(--accent) 55%, transparent);
+}
+.tabgrid__cell.is-now::before {
+  background: var(--accent);
+}
+.tabgrid__note {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.02em;
+  color: var(--accent-2);
+  margin-top: 0.2rem;
+  min-height: 0.7rem;
+}
+.tabgrid__bar {
+  position: relative;
+}
+.tabgrid__bar::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 10%;
+  bottom: 10%;
+  width: 2px;
+  background: var(--glass-line);
+  transform: translateX(-50%);
+}
+
+/* tab embutida na cifra */
+.cf-part {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0.7rem 0 0.2rem;
+}
+.cf-tab {
+  margin: 0.4rem 0 0.6rem;
+}
+
+/* texto auxiliar do card de tablatura */
+.zone-tab__lead {
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin: 0 0 0.8rem;
+  line-height: 1.45;
+}
+.zone-tab__status {
+  font-size: 0.72rem;
+  color: var(--accent);
+  margin: 0.6rem 0 0;
+  min-height: 1rem;
+}
+
+/* setas de posição (voicing) — select mais compacto entre as setas */
+.voicing-nav .eq-select {
+  width: auto;
+  min-width: 5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboard,
+  .onboard__panel,
+  .onboard-card,
+  .onboard-card__glow {
+    transition: none;
+  }
+  .onboard__bg,
+  .onboard__disc {
+    animation: none;
   }
 }

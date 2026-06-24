@@ -1,47 +1,46 @@
 // =============================================================================
 // zone.ts — Aba "Zone": modo para músicos
 //
-// Reúne, para a música tocando:
-//   - Acorde atual (detectado do áudio local, ou selecionado da cifra manual).
-//   - Diagramas por instrumento: violão (acorde), guitarra (power chord),
-//     baixo (fundamental/5ª/8ª), teclado (teclas do acorde) e bateria (groove
-//     em notação seguindo o metrônomo).
-//   - Transposição de tom (afeta a cifra exibida e, no áudio local, o playback).
-//   - Metrônomo com BPM manual, tap-tempo e detecção automática.
-//   - Cifra manual: cole acordes e clique para ver o diagrama (transposto).
-//
-// O zone.ts cuida só da interface/render; o áudio (transpose, metrônomo) é
-// injetado pelo main via callbacks/instâncias.
+//   - Acorde atual: detectado do áudio local, fixado de um clique (campo
+//     harmônico / cifra) ou retomando o áudio.
+//   - Diagramas por instrumento com VÁRIAS posições (voicings) navegáveis.
+//   - Campo harmônico do tom (segue o áudio ou escolhido manualmente).
+//   - Metrônomo (manual / tap / automático).
+//   - Transposição que afeta a cifra exibida e o áudio local.
+//   - Editor de letra & cifra (em cifra.ts) com upload .txt/.pdf.
 // =============================================================================
 
 import {
-  bassVoicing,
+  NOTE_NAMES,
+  bassVoicings,
   chordLabel,
   chordTones,
-  guitarVoicing,
-  parseChord,
-  powerChordVoicing,
-  rootName,
+  chordVoicings,
+  guitarVoicings,
+  harmonicField,
+  powerChordVoicings,
   transposeChord,
   TUNINGS,
+  TUNING_PRESETS,
 } from "./chords";
 import type { Chord, Voicing } from "./chords";
 import type { Metronome } from "./metronome";
+import { CifraEditor } from "./cifra";
+import { TabEditor } from "./tab";
+import type { TabBlock } from "./tab";
 
-type Instrument = "violao" | "guitarra" | "teclado" | "baixo" | "bateria";
+type Instrument = "violao" | "guitarra" | "teclado" | "baixo" | "bateria" | "ukulele" | "cavaquinho";
+
+/** Instrumentos de braço (têm diagrama de trastes). */
+const FRETTED = new Set<Instrument>(["violao", "guitarra", "baixo", "ukulele", "cavaquinho"]);
 
 interface ZoneDeps {
   metronome: Metronome;
-  /** Aplica a transposição ao áudio local (semitons). */
   onTranspose: (semitones: number) => void;
-  /** Retorna um BPM estimado do áudio local, ou null se indisponível. */
   getAutoBpm: () => number | null;
 }
 
-const $ = <T extends HTMLElement>(id: string): T =>
-  document.getElementById(id) as T;
-
-const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 export class Zone {
   private readonly el = {
@@ -49,10 +48,33 @@ export class Zone {
     close: $<HTMLButtonElement>("zoneClose"),
     chord: $("zoneChord"),
     chordSrc: $("zoneChordSrc"),
+    auto: $<HTMLButtonElement>("zoneAuto"),
     transDown: $<HTMLButtonElement>("zoneTransDown"),
     transUp: $<HTMLButtonElement>("zoneTransUp"),
     transVal: $("zoneTransVal"),
     diagram: $("zoneDiagram"),
+    voicingNav: $("voicingNav"),
+    voicingPrev: $<HTMLButtonElement>("voicingPrev"),
+    voicingNext: $<HTMLButtonElement>("voicingNext"),
+    voicingSelect: $<HTMLSelectElement>("voicingSelect"),
+    voicingCount: $("voicingCount"),
+    zoneSetup: $("zoneSetup"),
+    zoneTuningField: $("zoneTuningField"),
+    zoneCapoField: $("zoneCapoField"),
+    zoneTuning: $<HTMLSelectElement>("zoneTuning"),
+    zoneCapo: $<HTMLSelectElement>("zoneCapo"),
+    tabEditor: $("tabEditor"),
+    tabInput: $<HTMLTextAreaElement>("tabInput"),
+    tabTemplate: $<HTMLButtonElement>("tabTemplate"),
+    tabStatus: $("tabStatus"),
+    dlCifra: $<HTMLButtonElement>("dlCifra"),
+    dlTab: $<HTMLButtonElement>("dlTab"),
+    dlBoth: $<HTMLButtonElement>("dlBoth"),
+    shareDoc: $<HTMLButtonElement>("shareDoc"),
+    hfFollow: $<HTMLInputElement>("hfFollow"),
+    hfTonic: $<HTMLSelectElement>("hfTonic"),
+    hfMode: $<HTMLSelectElement>("hfMode"),
+    hfChords: $("hfChords"),
     metroBpm: $<HTMLInputElement>("metroBpm"),
     metroDown: $<HTMLButtonElement>("metroDown"),
     metroUp: $<HTMLButtonElement>("metroUp"),
@@ -61,22 +83,66 @@ export class Zone {
     metroTap: $<HTMLButtonElement>("metroTap"),
     metroAuto: $<HTMLButtonElement>("metroAuto"),
     metroHint: $("metroHint"),
-    cifraInput: $<HTMLTextAreaElement>("cifraInput"),
-    cifraOut: $("cifraOut"),
   };
 
   private instrument: Instrument = "violao";
   private transpose = 0;
+  private capo = 0;
+  private tuning: number[] = TUNING_PRESETS[0]!.pitches;
+  private voicingIndex = 0;
   private detected: Chord | null = null;
-  private manual: { chord: Chord; raw: string }[] = [];
-  private selectedManual: number | null = null;
+  private detectedTonic = 0;
+  private detectedMajor = true;
+  private pinned: Chord | null = null;
+  private voicings: Voicing[] = [];
   private beatDots: HTMLElement[] = [];
   private drumNowCol = -1;
+  private readonly cifra: CifraEditor;
+  private readonly tab: TabEditor;
 
   constructor(private readonly deps: ZoneDeps) {
-    this.wire();
+    this.cifra = new CifraEditor({
+      container: $("cifraOut"),
+      fileBtn: $<HTMLButtonElement>("cifraFileBtn"),
+      fileInput: $<HTMLInputElement>("cifraFile"),
+      textarea: $<HTMLTextAreaElement>("cifraInput"),
+      onChordClick: (chord) => this.pinChord(chord),
+      getTranspose: () => this.transpose,
+      getPitches: () => this.frettedPitches(),
+      onTabsDetected: (blocks) => this.loadDetectedTab(blocks),
+    });
+    this.tab = new TabEditor({
+      container: this.el.tabEditor,
+      textarea: this.el.tabInput,
+      getPitches: () => this.frettedPitches(),
+    });
     this.buildBeatDots();
+    this.buildHarmonicPicker();
+    this.buildTuningCapoPickers();
+    this.wire();
+    this.applyInstrumentSetup();
     this.render();
+    this.renderHarmonic();
+  }
+
+  /** Popula os seletores de afinação e capotraste. */
+  private buildTuningCapoPickers(): void {
+    this.el.zoneTuning.replaceChildren(
+      ...TUNING_PRESETS.map((t) => {
+        const opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = t.name;
+        return opt;
+      }),
+    );
+    this.el.zoneCapo.replaceChildren(
+      ...Array.from({ length: 12 }, (_, i) => {
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = i === 0 ? "Sem capotraste" : `Casa ${i}`;
+        return opt;
+      }),
+    );
   }
 
   // --- ciclo de vida ---------------------------------------------------------
@@ -87,6 +153,7 @@ export class Zone {
   open(): void {
     this.el.root.hidden = false;
     this.render();
+    this.renderHarmonic();
   }
   close(): void {
     this.el.root.hidden = true;
@@ -96,32 +163,77 @@ export class Zone {
     else this.open();
   }
 
-  /** Recebe o acorde detectado do áudio (chamado pelo identificador de freq.). */
+  /** Acorde detectado do áudio (chamado pelo identificador de frequência). */
   setDetectedChord(chord: Chord | null): void {
     this.detected = chord;
-    // Só re-renderiza se a fonte ativa for a detecção e a aba estiver visível.
-    if (this.isOpen && this.selectedManual === null) this.render();
+    if (this.isOpen && this.pinned === null) this.render();
   }
 
-  // --- wiring de eventos -----------------------------------------------------
+  /** Tom detectado do áudio — alimenta o campo harmônico em modo "seguir". */
+  setDetectedKey(tonic: number, major: boolean): void {
+    this.detectedTonic = tonic;
+    this.detectedMajor = major;
+    if (this.isOpen && this.el.hfFollow.checked) this.renderHarmonic();
+  }
+
+  // --- wiring ----------------------------------------------------------------
 
   private wire(): void {
     this.el.close.addEventListener("click", () => this.close());
+    this.el.auto.addEventListener("click", () => this.resumeAuto());
 
-    // Tabs de instrumento.
     this.el.root.querySelectorAll<HTMLButtonElement>(".zone-inst").forEach((btn) => {
       btn.addEventListener("click", () => {
         this.instrument = btn.dataset.inst as Instrument;
-        this.el.root
-          .querySelectorAll(".zone-inst")
-          .forEach((b) => b.classList.toggle("is-active", b === btn));
+        this.el.root.querySelectorAll(".zone-inst").forEach((b) => b.classList.toggle("is-active", b === btn));
+        this.voicingIndex = 0;
+        this.applyInstrumentSetup();
         this.render();
       });
     });
 
-    // Transpose.
     this.el.transDown.addEventListener("click", () => this.setTranspose(this.transpose - 1));
     this.el.transUp.addEventListener("click", () => this.setTranspose(this.transpose + 1));
+
+    // Afinação, capotraste e seletor de posição.
+    this.el.zoneTuning.addEventListener("change", () => {
+      const preset = TUNING_PRESETS.find((t) => t.id === this.el.zoneTuning.value);
+      this.tuning = preset ? preset.pitches : TUNING_PRESETS[0]!.pitches;
+      this.voicingIndex = 0;
+      if (FRETTED.has(this.instrument)) this.tab.setPitches(this.frettedPitches());
+      this.render();
+    });
+    this.el.zoneCapo.addEventListener("change", () => {
+      this.capo = Number(this.el.zoneCapo.value);
+      this.voicingIndex = 0;
+      this.render();
+    });
+    this.el.voicingSelect.addEventListener("change", () => {
+      this.voicingIndex = Number(this.el.voicingSelect.value);
+      this.renderDiagram(this.activeChord());
+    });
+    // Setas para percorrer as posições (voicings) do acorde.
+    this.el.voicingPrev.addEventListener("click", () => this.stepVoicing(-1));
+    this.el.voicingNext.addEventListener("click", () => this.stepVoicing(1));
+
+    // Tablatura: inserir um compasso em branco na grade.
+    this.el.tabTemplate.addEventListener("click", () => this.tab.insertMeasure());
+
+    // Exportar / compartilhar.
+    this.el.dlCifra.addEventListener("click", () => this.download("cifra"));
+    this.el.dlTab.addEventListener("click", () => this.download("tab"));
+    this.el.dlBoth.addEventListener("click", () => this.download("both"));
+    this.el.shareDoc.addEventListener("click", () => void this.share());
+
+    // Campo harmônico.
+    this.el.hfFollow.addEventListener("change", () => {
+      const follow = this.el.hfFollow.checked;
+      this.el.hfTonic.disabled = follow;
+      this.el.hfMode.disabled = follow;
+      this.renderHarmonic();
+    });
+    this.el.hfTonic.addEventListener("change", () => this.renderHarmonic());
+    this.el.hfMode.addEventListener("change", () => this.renderHarmonic());
 
     // Metrônomo.
     const m = this.deps.metronome;
@@ -134,23 +246,38 @@ export class Zone {
       this.el.metroBpm.value = String(m.tempo);
     });
     this.el.metroAuto.addEventListener("click", () => this.autoBpm());
-
     m.onToggle = (running) => {
       this.el.metroToggle.textContent = running ? "⏸ Parar" : "▶ Iniciar";
       if (!running) this.clearBeatHighlight();
     };
     m.onBeat = (beat) => this.onBeat(beat);
+  }
 
-    // Cifra manual.
-    this.el.cifraInput.addEventListener("input", () => this.parseCifra());
+  // --- acorde ativo / fixar --------------------------------------------------
+
+  private activeChord(): Chord | null {
+    return this.pinned ?? this.detected;
+  }
+
+  /** Fixa um acorde (de um clique) e mostra o botão de voltar ao áudio. */
+  private pinChord(chord: Chord): void {
+    this.pinned = chord;
+    this.el.auto.hidden = false;
+    if (!this.isOpen) this.open();
+    else this.render();
+  }
+
+  private resumeAuto(): void {
+    this.pinned = null;
+    this.el.auto.hidden = true;
+    this.render();
   }
 
   private setTranspose(semitones: number): void {
     this.transpose = Math.max(-6, Math.min(6, semitones));
     this.el.transVal.textContent = this.transpose > 0 ? `+${this.transpose}` : String(this.transpose);
-    this.deps.onTranspose(this.transpose); // afeta o áudio local
-    this.renderCifra(); // rótulos transpostos
-    this.render();
+    this.deps.onTranspose(this.transpose);
+    this.cifra.refreshTranspose();
   }
 
   private nudgeBpm(delta: number): void {
@@ -166,37 +293,99 @@ export class Zone {
       this.el.metroBpm.value = String(this.deps.metronome.tempo);
       this.el.metroHint.textContent = `Detectado: ${bpm} BPM (áudio local).`;
     } else {
-      this.el.metroHint.textContent = "Sem sinal para detectar — toque uma faixa local por alguns segundos.";
+      this.el.metroHint.textContent = "Sem sinal — toque uma faixa local por alguns segundos.";
     }
   }
 
-  // --- acorde ativo ----------------------------------------------------------
-
-  /** Acorde a exibir: o selecionado na cifra (transposto) ou o detectado. */
-  private activeChord(): Chord | null {
-    if (this.selectedManual !== null) {
-      const item = this.manual[this.selectedManual];
-      return item ? transposeChord(item.chord, this.transpose) : null;
-    }
-    return this.detected;
-  }
-
-  // --- render principal ------------------------------------------------------
+  // --- render do diagrama ----------------------------------------------------
 
   private render(): void {
     const chord = this.activeChord();
     this.el.chord.textContent = chord ? chordLabel(chord) : "—";
     this.el.chordSrc.textContent =
-      this.selectedManual !== null
-        ? "cifra manual"
+      this.pinned !== null
+        ? "fixado (clique)"
         : this.detected
           ? "detectado · áudio local"
           : "aguardando áudio local…";
+    this.el.auto.hidden = this.pinned === null;
+
+    this.voicings = chord ? this.computeVoicings(chord) : [];
     this.renderDiagram(chord);
+  }
+
+  /** Com capotraste, a forma fingida é o acorde N semitons abaixo. */
+  private effectiveChord(chord: Chord): Chord {
+    return this.capo > 0 ? transposeChord(chord, -this.capo) : chord;
+  }
+
+  private computeVoicings(chord: Chord): Voicing[] {
+    const c = this.effectiveChord(chord);
+    switch (this.instrument) {
+      case "violao":
+        return guitarVoicings(c, this.tuning); // todos os modelos na afinação
+      case "guitarra":
+        // Acordes completos + power chords (deixou de ser só power chord).
+        return [...guitarVoicings(c, this.tuning), ...powerChordVoicings(c, this.tuning)];
+      case "baixo":
+        return bassVoicings(c, TUNINGS.bass);
+      case "ukulele":
+        return chordVoicings(c, TUNINGS.ukulele, { requireBass: false });
+      case "cavaquinho":
+        return chordVoicings(c, TUNINGS.cavaquinho, { requireBass: false });
+      default:
+        return [];
+    }
+  }
+
+  /** Afinação (grave→aguda) do instrumento atual; violão p/ não-trasteados. */
+  private frettedPitches(): number[] {
+    switch (this.instrument) {
+      case "baixo":
+        return TUNINGS.bass;
+      case "ukulele":
+        return TUNINGS.ukulele;
+      case "cavaquinho":
+        return TUNINGS.cavaquinho;
+      default:
+        return this.tuning; // violão, guitarra (e fallback p/ teclado/bateria)
+    }
+  }
+
+  /** Afinação usada nos diagramas de braço do instrumento atual. */
+  private diagramTuning(): number[] {
+    return this.frettedPitches();
+  }
+
+  /** Mostra/oculta afinação e capotraste conforme o instrumento. */
+  private applyInstrumentSetup(): void {
+    // Afinação personalizável só p/ instrumentos de 6 cordas (violão/guitarra).
+    const tuningOn = this.instrument === "violao" || this.instrument === "guitarra";
+    // Capotraste p/ todos os instrumentos de braço.
+    const capoOn = FRETTED.has(this.instrument);
+    this.el.zoneTuningField.hidden = !tuningOn;
+    this.el.zoneCapoField.hidden = !capoOn;
+    this.el.zoneSetup.hidden = !tuningOn && !capoOn;
+    if (FRETTED.has(this.instrument)) this.tab.setPitches(this.frettedPitches());
+  }
+
+  /** Percorre as posições (voicings) com as setas, em ciclo. */
+  private stepVoicing(delta: number): void {
+    if (!this.voicings.length) return;
+    this.voicingIndex = (this.voicingIndex + delta + this.voicings.length) % this.voicings.length;
+    this.el.voicingSelect.value = String(this.voicingIndex);
+    this.showVoicing();
+  }
+
+  /** Carrega no editor de grade a tablatura detectada numa cifra. */
+  private loadDetectedTab(blocks: TabBlock[]): void {
+    this.tab.loadBlocks(blocks);
+    this.el.tabStatus.textContent = `✓ Tablatura detectada na cifra (${blocks.length === 1 ? "1 bloco" : `${blocks.length} blocos`}) e carregada no editor.`;
   }
 
   private renderDiagram(chord: Chord | null): void {
     const box = this.el.diagram;
+    this.el.voicingNav.hidden = true;
     if (this.instrument === "bateria") {
       box.replaceChildren(this.renderDrums());
       return;
@@ -204,42 +393,67 @@ export class Zone {
     if (!chord) {
       const empty = document.createElement("p");
       empty.className = "zone-diagram__empty";
-      empty.textContent =
-        "Toque uma faixa local para detectar o acorde, ou cole uma cifra e clique em um acorde.";
+      empty.textContent = "Toque uma faixa local, clique num acorde do campo harmônico ou cole uma cifra.";
       box.replaceChildren(empty);
       return;
     }
-    switch (this.instrument) {
-      case "violao":
-        box.replaceChildren(this.renderFretboard(guitarVoicing(chord), TUNINGS.guitar));
-        break;
-      case "guitarra":
-        box.replaceChildren(this.renderFretboard(powerChordVoicing(chord), TUNINGS.guitar));
-        break;
-      case "baixo":
-        box.replaceChildren(this.renderFretboard(bassVoicing(chord), TUNINGS.bass));
-        break;
-      case "teclado":
-        box.replaceChildren(this.renderPiano(chord));
-        break;
+    if (this.instrument === "teclado") {
+      box.replaceChildren(this.renderPiano(chord));
+      return;
     }
+    // Instrumentos de braço: um modelo por vez, escolhido no seletor/setas.
+    if (!this.voicings.length) {
+      const empty = document.createElement("p");
+      empty.className = "zone-diagram__empty";
+      empty.textContent = "Sem posição encontrada para este acorde nesta afinação.";
+      box.replaceChildren(empty);
+      return;
+    }
+    if (this.voicingIndex >= this.voicings.length) this.voicingIndex = 0;
+    // Popula o seletor "Pos. 1 … N".
+    this.el.voicingSelect.replaceChildren(
+      ...this.voicings.map((_, i) => {
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = `Pos. ${i + 1}`;
+        return opt;
+      }),
+    );
+    this.el.voicingSelect.value = String(this.voicingIndex);
+    this.el.voicingCount.textContent = `de ${this.voicings.length}`;
+    this.el.voicingNav.hidden = false;
+    this.showVoicing();
   }
 
-  // --- diagrama de braço (violão / guitarra / baixo) -------------------------
+  /** Renderiza apenas o diagrama do voicing atualmente selecionado. */
+  private showVoicing(): void {
+    if (this.voicingIndex >= this.voicings.length) this.voicingIndex = 0;
+    const voicing = this.voicings[this.voicingIndex];
+    if (!voicing) return;
+    this.el.voicingSelect.value = String(this.voicingIndex);
+    this.el.diagram.replaceChildren(this.renderFretboard(voicing, this.diagramTuning(), this.capo));
+  }
 
-  private renderFretboard(voicing: Voicing, tuning: number[]): HTMLElement {
+  // --- diagrama de braço -----------------------------------------------------
+
+  private renderFretboard(voicing: Voicing, tuning: number[], capo = 0): HTMLElement {
     const FRETS = 5;
     const fretted = voicing.frets.filter((f): f is number => f !== null && f > 0);
     const maxF = fretted.length ? Math.max(...fretted) : 0;
     const minF = fretted.length ? Math.min(...fretted) : 0;
-    // Acordes na região aberta começam em 1 (casa 0 vira marcador de corda solta).
     const start = maxF <= FRETS ? 1 : minF;
 
     const wrap = document.createElement("div");
     wrap.className = "fretboard";
     wrap.style.setProperty("--frets", String(FRETS));
 
-    // Renderiza da corda mais grave (índice 0) para a mais aguda (embaixo).
+    if (capo > 0) {
+      const badge = document.createElement("div");
+      badge.className = "fb-capo";
+      badge.textContent = `🔒 Capotraste na casa ${capo} — a forma abaixo é fingida a partir do capo`;
+      wrap.appendChild(badge);
+    }
+
     for (let s = 0; s < tuning.length; s++) {
       const fret = voicing.frets[s] ?? null;
       const row = document.createElement("div");
@@ -268,12 +482,11 @@ export class Zone {
       wrap.appendChild(row);
     }
 
-    // Numeração de casas embaixo.
     const nums = document.createElement("div");
     nums.className = "fb-fretnums";
     nums.style.setProperty("--frets", String(FRETS));
-    nums.appendChild(spacer());
-    nums.appendChild(spacer());
+    nums.appendChild(document.createElement("span"));
+    nums.appendChild(document.createElement("span"));
     for (let c = 0; c < FRETS; c++) {
       const n = document.createElement("span");
       n.className = "fb-fretnum";
@@ -290,11 +503,9 @@ export class Zone {
     const tones = new Set(chordTones(chord));
     const piano = document.createElement("div");
     piano.className = "piano";
-
-    const whitePc = [0, 2, 4, 5, 7, 9, 11]; // C D E F G A B
+    const whitePc = [0, 2, 4, 5, 7, 9, 11];
     const OCTAVES = 2;
 
-    // Teclas brancas.
     for (let o = 0; o < OCTAVES; o++) {
       for (const pc of whitePc) {
         const key = document.createElement("div");
@@ -304,14 +515,12 @@ export class Zone {
         piano.appendChild(key);
       }
     }
-
-    // Teclas pretas posicionadas sobre os limites das brancas.
     const blacks = [
-      { pc: 1, boundary: 1 },  // C#
-      { pc: 3, boundary: 2 },  // D#
-      { pc: 6, boundary: 4 },  // F#
-      { pc: 8, boundary: 5 },  // G#
-      { pc: 10, boundary: 6 }, // A#
+      { pc: 1, boundary: 1 },
+      { pc: 3, boundary: 2 },
+      { pc: 6, boundary: 4 },
+      { pc: 8, boundary: 5 },
+      { pc: 10, boundary: 6 },
     ];
     const unit = 100 / (whitePc.length * OCTAVES);
     for (let o = 0; o < OCTAVES; o++) {
@@ -332,7 +541,6 @@ export class Zone {
   private renderDrums(): HTMLElement {
     const wrap = document.createElement("div");
     wrap.className = "drums";
-    // Groove básico de rock em 4/4 (8 colunas = colcheias).
     const rows: { label: string; hits: number[] }[] = [
       { label: "Hi-hat", hits: [0, 1, 2, 3, 4, 5, 6, 7] },
       { label: "Caixa", hits: [2, 6] },
@@ -364,6 +572,100 @@ export class Zone {
     return wrap;
   }
 
+  // --- campo harmônico -------------------------------------------------------
+
+  private buildHarmonicPicker(): void {
+    this.el.hfTonic.replaceChildren(
+      ...NOTE_NAMES.map((name, i) => {
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = name;
+        return opt;
+      }),
+    );
+    this.el.hfTonic.disabled = true; // começa em "seguir áudio"
+    this.el.hfMode.disabled = true;
+  }
+
+  private renderHarmonic(): void {
+    const follow = this.el.hfFollow.checked;
+    const tonic = follow ? this.detectedTonic : Number(this.el.hfTonic.value);
+    const major = follow ? this.detectedMajor : this.el.hfMode.value === "maj";
+    if (follow) {
+      this.el.hfTonic.value = String(tonic);
+      this.el.hfMode.value = major ? "maj" : "min";
+    }
+    const field = harmonicField(tonic, major);
+    this.el.hfChords.replaceChildren(
+      ...field.map(({ chord, degree }) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "hf-chord";
+        btn.innerHTML = `<span class="hf-chord__deg">${degree}</span><span class="hf-chord__name">${chordLabel(chord)}</span>`;
+        btn.addEventListener("click", () => this.pinChord(chord));
+        return btn;
+      }),
+    );
+  }
+
+  // --- exportar / compartilhar -----------------------------------------------
+
+  /** Texto atual da cifra (conteúdo do editor de letra & cifra). */
+  private cifraText(): string {
+    return ($("cifraInput") as HTMLTextAreaElement).value.trim();
+  }
+  /** Tablatura atual — serializada da grade interativa. */
+  private tabText(): string {
+    return this.tab.toText().trim();
+  }
+
+  /** Monta o documento a exportar conforme o tipo. */
+  private buildDoc(kind: "cifra" | "tab" | "both"): { name: string; text: string } {
+    const cifra = this.cifraText();
+    const tab = this.tabText();
+    if (kind === "cifra") return { name: "cifra.txt", text: cifra || "(cifra vazia)" };
+    if (kind === "tab") return { name: "tablatura.txt", text: tab || "(tablatura vazia)" };
+    const parts: string[] = [];
+    if (cifra) parts.push("=== CIFRA ===\n" + cifra);
+    if (tab) parts.push("=== TABLATURA ===\n" + tab);
+    return { name: "cifra-e-tab.txt", text: parts.join("\n\n") || "(vazio)" };
+  }
+
+  /** Baixa o documento como arquivo .txt. */
+  private download(kind: "cifra" | "tab" | "both"): void {
+    const { name, text } = this.buildDoc(kind);
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /** Compartilha (Web Share API) com fallback para download. */
+  private async share(): Promise<void> {
+    const { name, text } = this.buildDoc("both");
+    const nav = navigator as Navigator & {
+      canShare?: (data?: ShareData) => boolean;
+      share?: (data: ShareData) => Promise<void>;
+    };
+    try {
+      const file = new File([text], name, { type: "text/plain" });
+      if (nav.canShare?.({ files: [file] }) && nav.share) {
+        await nav.share({ files: [file], title: "Cifra & Tablatura" });
+        return;
+      }
+      if (nav.share) {
+        await nav.share({ title: "Cifra & Tablatura", text });
+        return;
+      }
+    } catch {
+      // cancelado ou indisponível — cai no download.
+    }
+    this.download("both");
+  }
+
   // --- metrônomo: batidas ----------------------------------------------------
 
   private buildBeatDots(): void {
@@ -380,7 +682,6 @@ export class Zone {
 
   private onBeat(beat: number): void {
     this.beatDots.forEach((d, i) => d.classList.toggle("is-now", i === beat));
-    // Atualiza a coluna "agora" da bateria (colcheia = beat * 2).
     this.drumNowCol = beat * 2;
     if (this.isOpen && this.instrument === "bateria") {
       this.el.diagram
@@ -394,47 +695,4 @@ export class Zone {
     this.drumNowCol = -1;
     this.el.diagram.querySelectorAll(".dr-cell.is-now").forEach((c) => c.classList.remove("is-now"));
   }
-
-  // --- cifra manual ----------------------------------------------------------
-
-  private parseCifra(): void {
-    const raw = this.el.cifraInput.value;
-    const tokens = raw.split(/\s+/).filter(Boolean);
-    this.manual = [];
-    for (const tok of tokens) {
-      const chord = parseChord(tok);
-      if (chord) this.manual.push({ chord, raw: tok });
-    }
-    this.selectedManual = this.manual.length ? 0 : null;
-    this.renderCifra();
-    this.render();
-  }
-
-  private renderCifra(): void {
-    this.el.cifraOut.replaceChildren(
-      ...this.manual.map((item, i) => {
-        const transposed = transposeChord(item.chord, this.transpose);
-        const span = document.createElement("button");
-        span.type = "button";
-        span.className = "cifra-chord" + (i === this.selectedManual ? " is-active" : "");
-        span.textContent = chordLabel(transposed);
-        span.addEventListener("click", () => {
-          this.selectedManual = i;
-          this.renderCifra();
-          this.render();
-        });
-        return span;
-      }),
-    );
-  }
-
-  /** Nome do tom atual considerando o transpose (utilidade para a interface). */
-  currentKeyName(): string {
-    return rootName(this.transpose);
-  }
-}
-
-/** Célula vazia usada para alinhar a numeração de casas com as colunas. */
-function spacer(): HTMLElement {
-  return document.createElement("span");
 }

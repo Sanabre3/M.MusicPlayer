@@ -71,6 +71,14 @@
         >
           🎸 Zone
         </button>
+        <button
+          id="chooserBtn"
+          class="pill"
+          type="button"
+          title="Escolher o modo de uso"
+        >
+          ✦ Modo
+        </button>
         <button id="spotifyBtn" class="pill pill--spotify" type="button">
           Connect Spotify
         </button>
@@ -263,10 +271,14 @@
           <span class="eq-field__label">Preset</span>
           <select id="eqPreset" class="eq-select"></select>
         </label>
-        <label class="eq-field" id="audioOutputRow" hidden>
+        <div class="eq-field" id="audioOutputRow" hidden>
           <span class="eq-field__label">Saída de áudio · faixas locais</span>
-          <select id="audioOutput" class="eq-select"></select>
-        </label>
+          <div class="eq-output">
+            <button id="audioOutputBtn" class="pill" type="button">🔊 Escolher saída…</button>
+            <select id="audioOutput" class="eq-select" hidden></select>
+          </div>
+          <span id="audioOutputLabel" class="eq-output__label">Padrão do sistema</span>
+        </div>
       </div>
 
       <div id="eqBands" class="eq-bands"></div>
@@ -348,6 +360,7 @@
               <span id="zoneChord" class="zone-chord__label">—</span>
               <span id="zoneChordSrc" class="zone-chord__src">aguardando áudio…</span>
             </div>
+            <button id="zoneAuto" class="zone-auto" type="button" hidden title="Voltar a acompanhar o áudio">↺ auto</button>
             <div class="zone-transpose">
               <span class="zone-field__label">Tom</span>
               <button id="zoneTransDown" class="zone-step" type="button" aria-label="Descer meio-tom">−</button>
@@ -359,12 +372,71 @@
           <div class="zone-instruments" role="tablist">
             <button class="zone-inst is-active" type="button" data-inst="violao">Violão</button>
             <button class="zone-inst" type="button" data-inst="guitarra">Guitarra</button>
+            <button class="zone-inst" type="button" data-inst="ukulele">Ukulele</button>
+            <button class="zone-inst" type="button" data-inst="cavaquinho">Cavaquinho</button>
             <button class="zone-inst" type="button" data-inst="teclado">Teclado</button>
             <button class="zone-inst" type="button" data-inst="baixo">Baixo</button>
             <button class="zone-inst" type="button" data-inst="bateria">Bateria</button>
           </div>
 
+          <div class="zone-setup" id="zoneSetup">
+            <label class="eq-field" id="zoneTuningField">
+              <span class="eq-field__label">Afinação</span>
+              <select id="zoneTuning" class="eq-select"></select>
+            </label>
+            <label class="eq-field" id="zoneCapoField">
+              <span class="eq-field__label">Capotraste</span>
+              <select id="zoneCapo" class="eq-select"></select>
+            </label>
+          </div>
+
           <div id="zoneDiagram" class="zone-diagram"></div>
+          <div id="voicingNav" class="voicing-nav" hidden>
+            <label class="zone-field__label" for="voicingSelect">Posição do diagrama</label>
+            <button id="voicingPrev" class="zone-step" type="button" aria-label="Posição anterior">‹</button>
+            <select id="voicingSelect" class="eq-select"></select>
+            <button id="voicingNext" class="zone-step" type="button" aria-label="Próxima posição">›</button>
+            <span id="voicingCount" class="voicing-nav__label"></span>
+          </div>
+
+          <div class="zone-card zone-harmonic">
+            <div class="zone-harmonic__head">
+              <h3 class="zone-card__title">Campo harmônico</h3>
+              <label class="zone-harmonic__follow">
+                <input id="hfFollow" type="checkbox" checked />
+                <span>seguir áudio</span>
+              </label>
+            </div>
+            <div class="zone-harmonic__picker">
+              <select id="hfTonic" class="eq-select" aria-label="Tônica"></select>
+              <select id="hfMode" class="eq-select" aria-label="Modo">
+                <option value="maj">maior</option>
+                <option value="min">menor</option>
+              </select>
+            </div>
+            <div id="hfChords" class="zone-harmonic__chords"></div>
+          </div>
+
+          <div class="zone-card zone-tab">
+            <div class="zone-tab__head">
+              <h3 class="zone-card__title">Tablatura</h3>
+              <button id="tabTemplate" class="pill" type="button">＋ Compasso</button>
+            </div>
+            <p class="zone-tab__lead">
+              Grade interativa: clique numa casa e digite o traste. Cada nota é
+              identificada pelo nome (ciente da afinação do instrumento). Acompanha
+              o instrumento escolhido acima.
+            </p>
+            <div id="tabEditor" class="tabed"></div>
+            <textarea
+              id="tabInput"
+              class="zone-tab__input"
+              spellcheck="false"
+              placeholder="Modo texto: escreva ou cole a tablatura crua (ex: E|--0--2--|). A grade acima é atualizada automaticamente."
+              hidden
+            ></textarea>
+            <p id="tabStatus" class="zone-tab__status" role="status"></p>
+          </div>
         </div>
 
         <aside class="zone__side">
@@ -386,14 +458,28 @@
           </div>
 
           <div class="zone-card zone-cifra">
-            <h3 class="zone-card__title">Cifra manual</h3>
+            <div class="zone-cifra__head">
+              <h3 class="zone-card__title">Letra &amp; Cifra</h3>
+              <button id="cifraFileBtn" class="pill" type="button">Carregar .txt/.pdf</button>
+            </div>
             <textarea
               id="cifraInput"
               class="zone-cifra__input"
-              placeholder="Cole os acordes: C  G  Am  F …  (clique em um acorde para ver o diagrama)"
+              placeholder="Cole a cifra ou letra aqui — ou carregue um arquivo. Clique numa palavra para anotar acordes; clique num acorde para ver o diagrama."
               spellcheck="false"
             ></textarea>
-            <div id="cifraOut" class="zone-cifra__out"></div>
+            <div id="cifraOut" class="zone-cifra__out cifra-doc"></div>
+            <input id="cifraFile" type="file" accept=".txt,.pdf,text/plain,application/pdf" hidden />
+          </div>
+
+          <div class="zone-card zone-export">
+            <h3 class="zone-card__title">Exportar / Compartilhar</h3>
+            <div class="zone-export__btns">
+              <button id="dlCifra" class="pill" type="button">⬇ Cifra</button>
+              <button id="dlTab" class="pill" type="button">⬇ Tab</button>
+              <button id="dlBoth" class="pill" type="button">⬇ Cifra + Tab</button>
+              <button id="shareDoc" class="pill" type="button">↗ Compartilhar</button>
+            </div>
           </div>
         </aside>
       </div>

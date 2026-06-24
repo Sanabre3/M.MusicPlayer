@@ -1,11 +1,11 @@
 // =============================================================================
-// chords.ts — Teoria musical: acordes, transposição e voicings de instrumentos
+// chords.ts — Teoria musical: acordes, transposição, voicings e campo harmônico
 //
-// Núcleo de música usado pela aba Zone:
-//   - Representação de acorde (tônica 0..11 + qualidade).
-//   - Parse de rótulos ("Am", "C#m7", "Bb7", "F#dim") e transposição.
-//   - Geração de voicings para violão (acorde completo), guitarra (power chord),
-//     baixo (fundamental + 5ª + 8ª) e teclado (teclas do acorde).
+// - Representação de acorde (tônica + qualidade + baixo opcional p/ "E/G#").
+// - Parser robusto de rótulos: tríades, 7ªs, sus, add, 6/9, dim7, m7b5, aug,
+//   com baixo invertido ("/G#").
+// - Gerador de voicings de violão/baixo por busca no braço (várias posições).
+// - Campo harmônico (acordes diatônicos) de qualquer tom maior/menor.
 //
 // Sem dependências — apenas aritmética de classes de altura (mod 12).
 // =============================================================================
@@ -13,178 +13,372 @@
 export const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 
 /** Qualidades de acorde suportadas. */
-export type ChordQuality = "maj" | "min" | "7" | "m7" | "maj7" | "dim";
+export type ChordQuality =
+  | "maj" | "min" | "dim" | "aug"
+  | "sus2" | "sus4"
+  | "6" | "m6"
+  | "7" | "maj7" | "m7" | "dim7" | "m7b5" | "aug7" | "7sus4"
+  | "9" | "maj9" | "m9" | "add9";
 
-/** Intervalos (em semitons a partir da tônica) de cada qualidade. */
+/** Intervalos (semitons a partir da tônica) de cada qualidade. */
 export const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   maj: [0, 4, 7],
   min: [0, 3, 7],
-  "7": [0, 4, 7, 10],
-  m7: [0, 3, 7, 10],
-  maj7: [0, 4, 7, 11],
   dim: [0, 3, 6],
+  aug: [0, 4, 8],
+  sus2: [0, 2, 7],
+  sus4: [0, 5, 7],
+  "6": [0, 4, 7, 9],
+  m6: [0, 3, 7, 9],
+  "7": [0, 4, 7, 10],
+  maj7: [0, 4, 7, 11],
+  m7: [0, 3, 7, 10],
+  dim7: [0, 3, 6, 9],
+  m7b5: [0, 3, 6, 10],
+  aug7: [0, 4, 8, 10],
+  "7sus4": [0, 5, 7, 10],
+  "9": [0, 4, 7, 10, 2],
+  maj9: [0, 4, 7, 11, 2],
+  m9: [0, 3, 7, 10, 2],
+  add9: [0, 4, 7, 2],
 };
 
 /** Sufixo textual de cada qualidade (maj é vazio). */
 export const QUALITY_SUFFIX: Record<ChordQuality, string> = {
-  maj: "",
-  min: "m",
-  "7": "7",
-  m7: "m7",
-  maj7: "maj7",
-  dim: "dim",
+  maj: "", min: "m", dim: "dim", aug: "aug",
+  sus2: "sus2", sus4: "sus4",
+  "6": "6", m6: "m6",
+  "7": "7", maj7: "maj7", m7: "m7", dim7: "dim7", m7b5: "m7b5", aug7: "aug7", "7sus4": "7sus4",
+  "9": "9", maj9: "maj9", m9: "m9", add9: "add9",
 };
 
-/** Um acorde: tônica (0..11, 0 = C) + qualidade. */
+/** Um acorde: tônica (0..11), qualidade e baixo opcional (acorde invertido). */
 export interface Chord {
   root: number;
   quality: ChordQuality;
+  /** Nota do baixo, quando diferente da tônica (ex: E/G# → bass = G#). */
+  bass?: number;
 }
 
-/** Rótulo legível do acorde (ex: { root: 9, quality: "min" } → "Am"). */
+/** Rótulo legível do acorde, incluindo o baixo invertido (ex: "E/G#"). */
 export function chordLabel(c: Chord): string {
-  return NOTE_NAMES[((c.root % 12) + 12) % 12] + QUALITY_SUFFIX[c.quality];
+  const base = rootName(c.root) + QUALITY_SUFFIX[c.quality];
+  return c.bass !== undefined && c.bass !== c.root ? `${base}/${rootName(c.bass)}` : base;
 }
 
-/** Transpõe um acorde por `semitones` (positivo sobe, negativo desce). */
+/** Transpõe um acorde (e seu baixo) por `semitones`. */
 export function transposeChord(c: Chord, semitones: number): Chord {
-  return { root: (((c.root + semitones) % 12) + 12) % 12, quality: c.quality };
+  const wrap = (n: number) => (((n + semitones) % 12) + 12) % 12;
+  return {
+    root: wrap(c.root),
+    quality: c.quality,
+    ...(c.bass !== undefined ? { bass: wrap(c.bass) } : {}),
+  };
 }
 
 /** Classes de altura (0..11) que compõem o acorde. */
 export function chordTones(c: Chord): number[] {
-  return QUALITY_INTERVALS[c.quality].map((iv) => (c.root + iv) % 12);
+  const tones = QUALITY_INTERVALS[c.quality].map((iv) => (c.root + iv) % 12);
+  if (c.bass !== undefined && !tones.includes(c.bass)) tones.push(c.bass);
+  return tones;
 }
 
-/** Nome da tônica (ex: root 9 → "A"). */
+/** Nome da nota (ex: 9 → "A"). */
 export function rootName(root: number): string {
   return NOTE_NAMES[((root % 12) + 12) % 12]!;
 }
 
-// Mapa de nomes (incl. bemóis) para classe de altura, para o parser de cifra.
+/** Nome da nota soante numa corda solta `open` pressionada na casa `fret`. */
+export function noteAtFret(open: number, fret: number): string {
+  return NOTE_NAMES[(((open + fret) % 12) + 12) % 12]!;
+}
+
+// Mapa de nomes (incl. bemóis) para classe de altura.
 const NAME_TO_PC: Record<string, number> = {
   C: 0, "B#": 0, "C#": 1, Db: 1, D: 2, "D#": 3, Eb: 3, E: 4, Fb: 4,
   "E#": 5, F: 5, "F#": 6, Gb: 6, G: 7, "G#": 8, Ab: 8, A: 9, "A#": 10,
   Bb: 10, B: 11, Cb: 11,
 };
 
+// Aliases de sufixo → qualidade canônica. Testados após normalização.
+const SUFFIX_TO_QUALITY: Record<string, ChordQuality> = {
+  "": "maj", "maj": "maj", "M": "maj",
+  "m": "min", "min": "min", "-": "min",
+  "dim": "dim", "o": "dim", "°": "dim",
+  "aug": "aug", "+": "aug",
+  "sus2": "sus2",
+  "sus": "sus4", "sus4": "sus4",
+  "6": "6", "maj6": "6",
+  "m6": "m6", "min6": "m6",
+  "7": "7", "dom7": "7",
+  "maj7": "maj7", "M7": "maj7", "Δ": "maj7", "7M": "maj7",
+  "m7": "m7", "min7": "m7", "-7": "m7",
+  "dim7": "dim7", "o7": "dim7", "°7": "dim7",
+  "m7b5": "m7b5", "ø": "m7b5", "min7b5": "m7b5", "-7b5": "m7b5", "m7-5": "m7b5",
+  "aug7": "aug7", "7#5": "aug7", "+7": "aug7", "7+": "aug7",
+  "7sus4": "7sus4", "7sus": "7sus4",
+  "9": "9", "add9": "add9",
+  "maj9": "maj9", "M9": "maj9",
+  "m9": "m9", "min9": "m9", "-9": "m9",
+};
+
 /**
- * Faz o parse de um token de cifra (ex: "C", "Am", "F#m7", "Bbmaj7", "Gdim").
- * Retorna null se não for um acorde reconhecível.
+ * Faz o parse de um token de cifra. Entende tríades, tétrades, extensões e
+ * acordes invertidos (ex: "C", "Am7", "F#m7b5", "Bb9", "E/G#", "Dsus4/A").
+ * Retorna null se não reconhecer.
  */
 export function parseChord(token: string): Chord | null {
-  const m = token.trim().match(/^([A-G][#b]?)(.*)$/);
+  let t = token.trim();
+  if (!t) return null;
+
+  // Separa o baixo invertido ("/G#").
+  let bass: number | undefined;
+  const slash = t.split("/");
+  if (slash.length === 2) {
+    const b = NAME_TO_PC[normalizeNote(slash[1]!)];
+    if (b !== undefined) bass = b;
+    t = slash[0]!;
+  }
+
+  const m = t.match(/^([A-G][#b]?)(.*)$/);
   if (!m) return null;
   const root = NAME_TO_PC[m[1]!];
   if (root === undefined) return null;
-  const rest = m[2]!.toLowerCase();
 
-  // Ordem importa: testar sufixos mais longos primeiro.
-  let quality: ChordQuality;
-  if (rest === "" || rest === "maj") quality = "maj";
-  else if (rest === "maj7" || rest === "M7") quality = "maj7";
-  else if (rest === "m7" || rest === "min7" || rest === "-7") quality = "m7";
-  else if (rest === "7" || rest === "dom7") quality = "7";
-  else if (rest === "m" || rest === "min" || rest === "-") quality = "min";
-  else if (rest === "dim" || rest === "°" || rest === "o") quality = "dim";
-  else if (rest.startsWith("m")) quality = "min"; // m9, madd9 etc → trata como menor
-  else quality = "maj"; // sus, add, 6, 9 etc → aproxima para maior
-  return { root, quality };
+  const quality = parseQuality(m[2]!);
+  return bass !== undefined ? { root, quality, bass } : { root, quality };
+}
+
+/** Normaliza a primeira letra (maiúscula) + acidente da nota do baixo. */
+function normalizeNote(s: string): string {
+  const m = s.trim().match(/^([a-gA-G])([#b]?)/);
+  if (!m) return s.trim();
+  return m[1]!.toUpperCase() + m[2]!;
+}
+
+/** Converte o sufixo do acorde (ex: "m7b5", "sus4") na qualidade canônica. */
+function parseQuality(raw: string): ChordQuality {
+  // Limpa parênteses, espaços e maiúsculas comuns mantendo letras-chave.
+  const cleaned = raw.replace(/[()\s]/g, "");
+  if (cleaned in SUFFIX_TO_QUALITY) return SUFFIX_TO_QUALITY[cleaned]!;
+  const lower = cleaned.toLowerCase();
+  if (lower in SUFFIX_TO_QUALITY) return SUFFIX_TO_QUALITY[lower]!;
+
+  // Heurística para extensões não listadas (ex: "m11", "13", "maj13").
+  if (lower.startsWith("maj")) return "maj7";
+  if (lower.startsWith("m") || lower.startsWith("-")) return "min";
+  if (lower.includes("sus")) return "sus4";
+  if (lower.includes("dim")) return "dim";
+  if (lower.includes("aug") || lower.includes("+")) return "aug";
+  if (lower.includes("7")) return "7";
+  return "maj";
 }
 
 // =============================================================================
-// Voicings de cordas (afinação padrão)
+// Voicings (afinação padrão) — gerados por busca no braço
 // =============================================================================
 
-/** Afinação do violão/guitarra (classes de altura, da 6ª corda grave à 1ª aguda). */
-const GUITAR_TUNING = [4, 9, 2, 7, 11, 4]; // E A D G B E
-/** Afinação do baixo (4 cordas, da grave à aguda). */
+const GUITAR_TUNING = [4, 9, 2, 7, 11, 4]; // E A D G B E (grave → aguda)
 const BASS_TUNING = [4, 9, 2, 7]; // E A D G
+const UKULELE_TUNING = [7, 0, 4, 9]; // G C E A (padrão)
+const CAVACO_TUNING = [2, 7, 11, 2]; // D G B D (cavaquinho)
 
-/** Um voicing: fret por corda (null = corda muda) + fret inicial do diagrama. */
+/** Um voicing: fret por corda (null = muda) + tônicas + casa inicial. */
 export interface Voicing {
-  /** Fret absoluto por corda; null = não tocada. Ordem = afinação (grave→aguda). */
   frets: (number | null)[];
-  /** Quais cordas tocam a tônica (para destaque). */
   isRoot: boolean[];
-  /** Fret inicial exibido no diagrama (0 = pestana/casa aberta). */
   baseFret: number;
 }
 
-// Formas móveis (frets relativos à pestana). null = corda muda.
-// Forma com tônica na 6ª corda (E-shape) e na 5ª corda (A-shape).
-const E_SHAPES: Record<ChordQuality, (number | null)[]> = {
-  maj:  [0, 2, 2, 1, 0, 0],
-  min:  [0, 2, 2, 0, 0, 0],
-  "7":  [0, 2, 0, 1, 0, 0],
-  m7:   [0, 2, 0, 0, 0, 0],
-  maj7: [0, 2, 1, 1, 0, 0],
-  dim:  [0, 1, 2, 0, 2, null],
-};
-const A_SHAPES: Record<ChordQuality, (number | null)[]> = {
-  maj:  [null, 0, 2, 2, 2, 0],
-  min:  [null, 0, 2, 2, 1, 0],
-  "7":  [null, 0, 2, 0, 2, 0],
-  m7:   [null, 0, 2, 0, 1, 0],
-  maj7: [null, 0, 2, 1, 2, 0],
-  dim:  [null, 0, 1, 2, 1, null],
-};
+/** Afinações de 6 cordas disponíveis no seletor (pitches grave → aguda). */
+export const TUNING_PRESETS: { id: string; name: string; pitches: number[] }[] = [
+  { id: "standard", name: "Padrão · E A D G B E", pitches: [4, 9, 2, 7, 11, 4] },
+  { id: "halfdown", name: "Meio tom abaixo · Eb", pitches: [3, 8, 1, 6, 10, 3] },
+  { id: "fulldown", name: "Um tom abaixo · D", pitches: [2, 7, 0, 5, 9, 2] },
+  { id: "dropd", name: "Drop D · D A D G B E", pitches: [2, 9, 2, 7, 11, 4] },
+  { id: "dropcsharp", name: "Drop C# · C# G# C# F# A# D#", pitches: [1, 8, 1, 6, 10, 3] },
+  { id: "dropc", name: "Drop C · C G C F A D", pitches: [0, 7, 0, 5, 9, 2] },
+  { id: "dadgad", name: "DADGAD", pitches: [2, 9, 2, 7, 9, 2] },
+  { id: "openg", name: "Open G · D G D G B D", pitches: [2, 7, 2, 7, 11, 2] },
+  { id: "opend", name: "Open D · D A D F# A D", pitches: [2, 9, 2, 6, 9, 2] },
+];
 
-/**
- * Gera um voicing de acorde completo para violão, escolhendo entre a forma
- * de 6ª corda e a de 5ª corda — a que cair na casa mais baixa.
- */
-export function guitarVoicing(c: Chord): Voicing {
-  // Casa da pestana para cada forma (tônica na corda de referência).
-  const eFret = (((c.root - GUITAR_TUNING[0]!) % 12) + 12) % 12; // ref 6ª corda (E)
-  const aFret = (((c.root - GUITAR_TUNING[1]!) % 12) + 12) % 12; // ref 5ª corda (A)
-  const useE = eFret <= aFret;
-  const base = useE ? eFret : aFret;
-  const shape = useE ? E_SHAPES[c.quality] : A_SHAPES[c.quality];
-  const rootStringIdx = useE ? 0 : 1;
-
-  const frets = shape.map((rel) => (rel === null ? null : rel + base));
-  const isRoot = shape.map((_, i) => i === rootStringIdx && frets[i] !== null);
-  return { frets, isRoot, baseFret: base };
+/** Opções da busca de voicings. */
+export interface VoicingOptions {
+  /** Máximo de posições retornadas. */
+  limit?: number;
+  /**
+   * Exige que a corda soante mais grave seja o baixo do acorde. Verdadeiro para
+   * violão/guitarra/baixo (a tônica/baixo fica no grave); falso para
+   * instrumentos reentrantes (ukulele) ou de afinação não-ascendente
+   * (cavaquinho), onde a corda mais grave não é necessariamente o baixo.
+   */
+  requireBass?: boolean;
 }
 
 /**
- * Power chord (tônica + 5ª + 8ª) — voicing típico de guitarra elétrica.
- * Tônica na 6ª corda quando possível; senão na 5ª.
+ * Gera TODOS os voicings tocáveis de um instrumento de cordas para o acorde,
+ * na afinação informada. Motor genérico — serve violão, guitarra, baixo,
+ * ukulele, cavaquinho e qualquer afinação custom.
  */
-export function powerChordVoicing(c: Chord): Voicing {
-  const eFret = (((c.root - GUITAR_TUNING[0]!) % 12) + 12) % 12;
-  const aFret = (((c.root - GUITAR_TUNING[1]!) % 12) + 12) % 12;
-  const useE = eFret <= aFret;
-  const base = useE ? eFret : aFret;
-  // Forma: tônica, 5ª (corda seguinte +2), 8ª (corda +2 mesma casa+2).
-  const frets: (number | null)[] = [null, null, null, null, null, null];
-  const isRoot = [false, false, false, false, false, false];
-  const r = useE ? 0 : 1;
-  frets[r] = base;
-  frets[r + 1] = base + 2;
-  frets[r + 2] = base + 2;
-  isRoot[r] = true;
-  return { frets, isRoot, baseFret: base };
+export function chordVoicings(c: Chord, tuning: number[], opts: VoicingOptions = {}): Voicing[] {
+  return fretboardVoicings(c, tuning, opts.limit ?? 24, opts.requireBass ?? true);
 }
 
 /**
- * Voicing de baixo: marca a fundamental na corda grave + a 5ª e a 8ª próximas.
+ * Gera TODOS os voicings tocáveis de violão para o acorde (até `limit`),
+ * na afinação informada (padrão por omissão).
  */
-export function bassVoicing(c: Chord): Voicing {
-  const eFret = (((c.root - BASS_TUNING[0]!) % 12) + 12) % 12;
-  const aFret = (((c.root - BASS_TUNING[1]!) % 12) + 12) % 12;
-  const useE = eFret <= aFret;
-  const base = useE ? eFret : aFret;
-  const frets: (number | null)[] = [null, null, null, null];
-  const isRoot = [false, false, false, false];
-  const r = useE ? 0 : 1;
-  frets[r] = base;        // fundamental
-  isRoot[r] = true;
-  if (r + 1 < 4) frets[r + 1] = base + 2; // 5ª
-  if (r + 2 < 4) frets[r + 2] = base + 2; // 8ª
-  return { frets, isRoot, baseFret: base };
+export function guitarVoicings(c: Chord, tuning: number[] = GUITAR_TUNING, limit = 24): Voicing[] {
+  return fretboardVoicings(c, tuning, limit);
+}
+
+/** Gera os voicings de baixo (4 cordas) — fundamental no grave + notas. */
+export function bassVoicings(c: Chord, tuning: number[] = BASS_TUNING, limit = 16): Voicing[] {
+  return fretboardVoicings(c, tuning, limit);
+}
+
+/**
+ * Busca exaustiva de voicings num braço de afinação arbitrária.
+ *
+ * Para cada janela de 4 casas, cada corda pode ser abafada ou tocar qualquer
+ * nota do acorde dentro da janela. Enumeramos todas as combinações e ficamos
+ * com as que são tocáveis e musicalmente válidas:
+ *   - cordas soantes contíguas (sem buracos no meio — abafa só nas pontas);
+ *   - a corda soante mais grave é o baixo correto (tônica ou baixo invertido);
+ *   - cobre a tríade característica do acorde;
+ *   - extensão ≤ 4 casas.
+ * O resultado é deduplicado e ordenado da posição mais fácil para a mais alta.
+ */
+function fretboardVoicings(c: Chord, tuning: number[], limit: number, requireBass = true): Voicing[] {
+  const tones = new Set(chordTones(c));
+  const bass = c.bass ?? c.root;
+  // Tríade característica que todo voicing precisa conter (define a qualidade).
+  const need = QUALITY_INTERVALS[c.quality].slice(0, 3).map((iv) => (c.root + iv) % 12);
+
+  const found: (Voicing & { score: number })[] = [];
+  const seen = new Set<string>();
+  const n = tuning.length;
+
+  for (let start = 0; start <= 9; start++) {
+    // Notas candidatas por corda nesta janela (null = corda abafada).
+    const candidates: (number | null)[][] = tuning.map((open) => {
+      const opts: (number | null)[] = [null];
+      for (let f = start; f <= start + 3; f++) {
+        if (tones.has((open + f) % 12)) opts.push(f);
+      }
+      return opts;
+    });
+
+    // Produto cartesiano iterativo das candidatas (índice por corda).
+    const idx = new Array(n).fill(0);
+    for (;;) {
+      const frets = candidates.map((opts, s) => opts[idx[s]!]!);
+      evaluate(frets);
+
+      // Avança o "contador" de combinações.
+      let k = n - 1;
+      while (k >= 0 && ++idx[k]! >= candidates[k]!.length) {
+        idx[k] = 0;
+        k--;
+      }
+      if (k < 0) break;
+    }
+  }
+
+  /** Valida e pontua uma combinação de casas. */
+  function evaluate(frets: (number | null)[]): void {
+    const sounding: number[] = [];
+    for (let s = 0; s < frets.length; s++) if (frets[s] !== null) sounding.push(s);
+    if (sounding.length < 3) return;
+
+    // Cordas soantes precisam ser contíguas (abafar só nas pontas).
+    const lo = sounding[0]!;
+    const hi = sounding[sounding.length - 1]!;
+    if (hi - lo + 1 !== sounding.length) return;
+
+    // A corda soante mais grave deve ser o baixo (instrumentos com tônica no
+    // grave). Em instrumentos reentrantes a checagem é dispensada.
+    if (requireBass && (tuning[lo]! + frets[lo]!) % 12 !== bass) return;
+
+    // Deve cobrir a tríade característica.
+    const covered = new Set<number>();
+    for (const s of sounding) covered.add((tuning[s]! + frets[s]!) % 12);
+    for (const t of need) if (!covered.has(t)) return;
+
+    // Extensão tocável (≤ 4 casas entre as notas pressionadas).
+    const fretted = sounding.map((s) => frets[s]!).filter((f) => f > 0);
+    const minFret = fretted.length ? Math.min(...fretted) : 0;
+    const span = fretted.length ? Math.max(...fretted) - minFret : 0;
+    if (span > 4) return;
+
+    const sig = frets.join(",");
+    if (seen.has(sig)) return;
+    seen.add(sig);
+
+    const isRoot = frets.map((f, s) => f !== null && (tuning[s]! + f) % 12 === c.root);
+    const muted = frets.filter((f) => f === null).length;
+    const baseFret = fretted.length ? minFret : 0;
+    // Mais fácil = menor extensão, mais cordas, posição mais baixa.
+    const score = span * 2 + muted + baseFret * 0.2;
+    found.push({ frets, isRoot, baseFret, score });
+  }
+
+  found.sort((a, b) => a.score - b.score || a.baseFret - b.baseFret);
+  return found.slice(0, limit).map(({ frets, isRoot, baseFret }) => ({ frets, isRoot, baseFret }));
+}
+
+/**
+ * Power chord (tônica + 5ª + 8ª) — voicing típico de guitarra. Oferece a forma
+ * com tônica na 6ª e na 5ª corda como duas opções.
+ */
+export function powerChordVoicings(c: Chord, tuning: number[] = GUITAR_TUNING): Voicing[] {
+  const make = (refString: number): Voicing => {
+    const base = (((c.root - tuning[refString]!) % 12) + 12) % 12;
+    const frets: (number | null)[] = [null, null, null, null, null, null];
+    const isRoot = [false, false, false, false, false, false];
+    frets[refString] = base;
+    frets[refString + 1] = base + 2;
+    if (refString + 2 < 6) frets[refString + 2] = base + 2;
+    isRoot[refString] = true;
+    return { frets, isRoot, baseFret: base };
+  };
+  // Tônica na 6ª, 5ª e 4ª corda → três posições no braço.
+  return [make(0), make(1), make(2)];
 }
 
 /** Afinações exportadas para os renderizadores de diagrama. */
-export const TUNINGS = { guitar: GUITAR_TUNING, bass: BASS_TUNING };
+export const TUNINGS = {
+  guitar: GUITAR_TUNING,
+  bass: BASS_TUNING,
+  ukulele: UKULELE_TUNING,
+  cavaquinho: CAVACO_TUNING,
+};
+
+// =============================================================================
+// Campo harmônico (acordes diatônicos de um tom)
+// =============================================================================
+
+export interface DegreeChord {
+  chord: Chord;
+  /** Grau em algarismos romanos (ex: "I", "vi", "vii°"). */
+  degree: string;
+}
+
+const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];
+const MINOR_SCALE = [0, 2, 3, 5, 7, 8, 10];
+const MAJOR_QUALITIES: ChordQuality[] = ["maj", "min", "min", "maj", "maj", "min", "dim"];
+const MINOR_QUALITIES: ChordQuality[] = ["min", "dim", "maj", "min", "min", "maj", "maj"];
+const MAJOR_DEGREES = ["I", "ii", "iii", "IV", "V", "vi", "vii°"];
+const MINOR_DEGREES = ["i", "ii°", "III", "iv", "v", "VI", "VII"];
+
+/** Retorna os 7 acordes diatônicos do tom (tônica + modo maior/menor). */
+export function harmonicField(tonic: number, major: boolean): DegreeChord[] {
+  const scale = major ? MAJOR_SCALE : MINOR_SCALE;
+  const quals = major ? MAJOR_QUALITIES : MINOR_QUALITIES;
+  const degs = major ? MAJOR_DEGREES : MINOR_DEGREES;
+  return scale.map((iv, i) => ({
+    chord: { root: (tonic + iv) % 12, quality: quals[i]! },
+    degree: degs[i]!,
+  }));
+}

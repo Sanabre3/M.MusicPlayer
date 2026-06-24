@@ -16,6 +16,7 @@ import {
   chordLabel,
   chordTones,
   chordVoicings,
+  degreeLabel,
   guitarVoicings,
   harmonicField,
   powerChordVoicings,
@@ -53,6 +54,8 @@ export class Zone {
     transUp: $<HTMLButtonElement>("zoneTransUp"),
     transVal: $("zoneTransVal"),
     diagram: $("zoneDiagram"),
+    labelNota: $<HTMLButtonElement>("labelNota"),
+    labelGrau: $<HTMLButtonElement>("labelGrau"),
     voicingNav: $("voicingNav"),
     voicingPrev: $<HTMLButtonElement>("voicingPrev"),
     voicingNext: $<HTMLButtonElement>("voicingNext"),
@@ -93,6 +96,14 @@ export class Zone {
   private detected: Chord | null = null;
   private detectedTonic = 0;
   private detectedMajor = true;
+  /** Rótulo dos diagramas: nome da nota ou grau (relativo ao campo harmônico). */
+  private labelMode: "nota" | "grau" = "nota";
+  /** Tônica atual do campo harmônico — usada para calcular os graus. */
+  private hfTonicPc = 0;
+  /** Tom da cifra (tom original) e se o campo harmônico está "seguindo a cifra". */
+  private cifraKeyTonic: number | null = null;
+  private cifraKeyMajor = true;
+  private hfFromCifra = false;
   private pinned: Chord | null = null;
   private voicings: Voicing[] = [];
   private beatDots: HTMLElement[] = [];
@@ -110,6 +121,7 @@ export class Zone {
       getTranspose: () => this.transpose,
       getPitches: () => this.frettedPitches(),
       onTabsDetected: (blocks) => this.loadDetectedTab(blocks),
+      onKeyDetected: (tonic, major) => this.onCifraKey(tonic, major),
     });
     this.tab = new TabEditor({
       container: this.el.tabEditor,
@@ -230,10 +242,21 @@ export class Zone {
       const follow = this.el.hfFollow.checked;
       this.el.hfTonic.disabled = follow;
       this.el.hfMode.disabled = follow;
+      this.hfFromCifra = false; // o usuário assumiu o controle do campo harmônico
       this.renderHarmonic();
     });
-    this.el.hfTonic.addEventListener("change", () => this.renderHarmonic());
-    this.el.hfMode.addEventListener("change", () => this.renderHarmonic());
+    this.el.hfTonic.addEventListener("change", () => {
+      this.hfFromCifra = false;
+      this.renderHarmonic();
+    });
+    this.el.hfMode.addEventListener("change", () => {
+      this.hfFromCifra = false;
+      this.renderHarmonic();
+    });
+
+    // Alternância do rótulo dos diagramas: nome da nota × grau.
+    this.el.labelNota.addEventListener("click", () => this.setLabelMode("nota"));
+    this.el.labelGrau.addEventListener("click", () => this.setLabelMode("grau"));
 
     // Metrônomo.
     const m = this.deps.metronome;
@@ -278,6 +301,8 @@ export class Zone {
     this.el.transVal.textContent = this.transpose > 0 ? `+${this.transpose}` : String(this.transpose);
     this.deps.onTranspose(this.transpose);
     this.cifra.refreshTranspose();
+    // Mantém o campo harmônico (e portanto os graus) acompanhando a cifra.
+    if (this.hfFromCifra) this.applyCifraKeyToHarmonic();
   }
 
   private nudgeBpm(delta: number): void {
@@ -383,6 +408,41 @@ export class Zone {
     this.el.tabStatus.textContent = `✓ Tablatura detectada na cifra (${blocks.length === 1 ? "1 bloco" : `${blocks.length} blocos`}) e carregada no editor.`;
   }
 
+  /** Recebe o tom estimado da cifra (tom original) e ajusta o campo harmônico. */
+  private onCifraKey(tonic: number, major: boolean): void {
+    this.cifraKeyTonic = tonic;
+    this.cifraKeyMajor = major;
+    this.hfFromCifra = true;
+    this.applyCifraKeyToHarmonic();
+  }
+
+  /** Aponta o campo harmônico para o tom da cifra (já somando a transposição). */
+  private applyCifraKeyToHarmonic(): void {
+    if (this.cifraKeyTonic === null) return;
+    const tonic = (((this.cifraKeyTonic + this.transpose) % 12) + 12) % 12;
+    this.el.hfFollow.checked = false;
+    this.el.hfTonic.disabled = false;
+    this.el.hfMode.disabled = false;
+    this.el.hfTonic.value = String(tonic);
+    this.el.hfMode.value = this.cifraKeyMajor ? "maj" : "min";
+    this.renderHarmonic();
+  }
+
+  /** Alterna o rótulo dos diagramas entre nome da nota e grau. */
+  private setLabelMode(mode: "nota" | "grau"): void {
+    this.labelMode = mode;
+    this.el.labelNota.classList.toggle("is-active", mode === "nota");
+    this.el.labelGrau.classList.toggle("is-active", mode === "grau");
+    this.renderDiagram(this.activeChord());
+  }
+
+  /** Rótulo de uma classe de altura conforme o modo (nota × grau). */
+  private noteOrDegree(pc: number): string {
+    return this.labelMode === "grau"
+      ? degreeLabel(pc, this.hfTonicPc)
+      : NOTE_NAMES[((pc % 12) + 12) % 12]!;
+  }
+
   private renderDiagram(chord: Chord | null): void {
     const box = this.el.diagram;
     this.el.voicingNav.hidden = true;
@@ -475,6 +535,7 @@ export class Zone {
         if (fret !== null && fret > 0 && fret === start + c) {
           const dot = document.createElement("span");
           dot.className = "fb-dot" + (voicing.isRoot[s] ? " is-root" : "");
+          dot.textContent = this.noteOrDegree((tuning[s]! + fret) % 12);
           cell.appendChild(dot);
         }
         row.appendChild(cell);
@@ -510,7 +571,10 @@ export class Zone {
       for (const pc of whitePc) {
         const key = document.createElement("div");
         key.className = "pk-white";
-        if (tones.has(pc)) key.classList.add("is-lit");
+        if (tones.has(pc)) {
+          key.classList.add("is-lit");
+          key.appendChild(this.pianoLabel(pc));
+        }
         if (pc === chord.root) key.classList.add("is-root");
         piano.appendChild(key);
       }
@@ -527,13 +591,24 @@ export class Zone {
       for (const b of blacks) {
         const key = document.createElement("div");
         key.className = "pk-black";
-        if (tones.has(b.pc)) key.classList.add("is-lit");
+        if (tones.has(b.pc)) {
+          key.classList.add("is-lit");
+          key.appendChild(this.pianoLabel(b.pc));
+        }
         if (b.pc === chord.root) key.classList.add("is-root");
         key.style.left = `${(o * whitePc.length + b.boundary) * unit}%`;
         piano.appendChild(key);
       }
     }
     return piano;
+  }
+
+  /** Rótulo (nota/grau) posicionado na base de uma tecla do piano. */
+  private pianoLabel(pc: number): HTMLElement {
+    const lab = document.createElement("span");
+    lab.className = "pk-label";
+    lab.textContent = this.noteOrDegree(pc);
+    return lab;
   }
 
   // --- bateria ---------------------------------------------------------------
@@ -595,6 +670,10 @@ export class Zone {
       this.el.hfTonic.value = String(tonic);
       this.el.hfMode.value = major ? "maj" : "min";
     }
+    // Guarda a tônica para o cálculo dos graus nos diagramas.
+    this.hfTonicPc = tonic;
+    // Se os diagramas mostram graus, atualiza-os ao mudar o tom.
+    if (this.labelMode === "grau" && this.isOpen) this.renderDiagram(this.activeChord());
     const field = harmonicField(tonic, major);
     this.el.hfChords.replaceChildren(
       ...field.map(({ chord, degree }) => {

@@ -284,11 +284,31 @@ export class SpotifyController {
   async searchAlbums(query: string): Promise<SpotifyAlbum[]> {
     await this.ensureFreshToken();
     if (!this.token) throw new Error("Conecte o Spotify primeiro.");
-    const params = new URLSearchParams({ q: query, type: "album", limit: "12" });
-    const res = await fetch(`https://api.spotify.com/v1/search?${params}`, {
+    const q = query.trim();
+    if (!q) return [];
+    const params = new URLSearchParams({ q, type: "album", limit: "20" });
+    const res = await fetch(`https://api.spotify.com/v1/search?${params.toString()}`, {
       headers: { Authorization: `Bearer ${this.token.access_token}` },
     });
-    if (!res.ok) throw new Error(`Busca de álbuns falhou (HTTP ${res.status}).`);
+    if (!res.ok) {
+      // O Spotify devolve o motivo no corpo. Um token expirado/inválido vem como
+      // 401 — ou 400 "Only valid bearer authentication supported".
+      let detail = "";
+      try {
+        const body = (await res.json()) as { error?: { message?: string } };
+        detail = body?.error?.message ?? "";
+      } catch {
+        /* resposta sem JSON */
+      }
+      const authProblem = res.status === 401 || /bearer|token|expired|unauthor/i.test(detail);
+      if (authProblem) {
+        this.logout(); // força reconexão
+        throw new Error(
+          `Sessão do Spotify expirou — reconecte pelo botão "Spotify".${detail ? ` (${detail})` : ""}`,
+        );
+      }
+      throw new Error(`Busca de álbuns falhou (HTTP ${res.status})${detail ? ` — ${detail}` : ""}.`);
+    }
     const data = await res.json();
     interface RawAlbum {
       uri: string;

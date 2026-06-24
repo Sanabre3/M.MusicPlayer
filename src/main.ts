@@ -104,7 +104,7 @@ const ui = {
   albumSearchForm:     $<HTMLFormElement>("albumSearchForm"),
   albumQuery:          $<HTMLInputElement>("albumQuery"),
   albumStatus:         $("albumStatus"),
-  albumResults:        $<HTMLOListElement>("albumResults"),
+  albumResults:        $("albumResults"),
   spotifyDisconnect:   $<HTMLButtonElement>("spotifyDisconnect"),
   albumCloseBtn:       $<HTMLButtonElement>("albumCloseBtn"),
 
@@ -735,32 +735,81 @@ async function runAlbumSearch(): Promise<void> {
     renderAlbumResults(albums);
   } catch (err) {
     ui.albumStatus.textContent = err instanceof Error ? err.message : "Falha na busca.";
+    // Se a sessão caiu (token inválido), a busca limpou o login — reflete na UI
+    // e oferece reconexão imediata.
+    if (!spotify.isAuthenticated) {
+      mode = "local";
+      void refreshSpotifyButton();
+      ui.spotifyAlbumsDialog.close();
+      ui.clientIdInput.value = spotify.clientId;
+      ui.spotifyDialog.showModal();
+    }
   }
 }
 
-/** Renderiza cada álbum como item clicável que inicia a reprodução. */
+/** Renderiza os álbuns como um slider horizontal (carrossel) com setas. */
 function renderAlbumResults(albums: SpotifyAlbum[]): void {
-  ui.albumResults.replaceChildren(
-    ...albums.map((a) => {
-      const li = document.createElement("li");
-      li.className = "yt-result";
-      li.innerHTML = `
-        <img class="yt-result__thumb" src="${a.cover}" alt="" loading="lazy" />
-        <span class="yt-result__meta">
-          <span class="yt-result__title">${escapeHtml(a.name)}</span>
-          <span class="yt-result__channel">${escapeHtml(a.artist)}</span>
-        </span>`;
-      li.addEventListener("click", () => {
-        // Silencia as outras fontes antes de transferir para o Spotify.
-        engine.pause();
-        if (mode === "youtube") youtube.pause();
-        mode = "spotify";
-        void spotify.playAlbum(a.uri);
-        ui.spotifyAlbumsDialog.close();
-      });
-      return li;
-    }),
-  );
+  if (!albums.length) {
+    ui.albumResults.replaceChildren();
+    return;
+  }
+
+  const slider = document.createElement("div");
+  slider.className = "album-slider";
+
+  const track = document.createElement("div");
+  track.className = "album-slider__track";
+
+  const prev = document.createElement("button");
+  prev.type = "button";
+  prev.className = "album-slider__nav album-slider__nav--prev";
+  prev.setAttribute("aria-label", "Álbuns anteriores");
+  prev.textContent = "‹";
+
+  const next = document.createElement("button");
+  next.type = "button";
+  next.className = "album-slider__nav album-slider__nav--next";
+  next.setAttribute("aria-label", "Próximos álbuns");
+  next.textContent = "›";
+
+  for (const a of albums) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "album-card";
+    card.innerHTML = `
+      <span class="album-card__art" style="background-image:url('${a.cover}')"></span>
+      <span class="album-card__name">${escapeHtml(a.name)}</span>
+      <span class="album-card__artist">${escapeHtml(a.artist)}</span>`;
+    card.addEventListener("click", () => {
+      // Silencia as outras fontes antes de transferir para o Spotify.
+      engine.pause();
+      if (mode === "youtube") youtube.pause();
+      mode = "spotify";
+      void spotify.playAlbum(a.uri);
+      ui.spotifyAlbumsDialog.close();
+    });
+    track.appendChild(card);
+  }
+
+  /** Quanto rolar por clique (uma "página" do track). */
+  const page = () => Math.max(track.clientWidth * 0.85, 200);
+  prev.addEventListener("click", () => track.scrollBy({ left: -page(), behavior: "smooth" }));
+  next.addEventListener("click", () => track.scrollBy({ left: page(), behavior: "smooth" }));
+
+  /** Desabilita as setas nas extremidades. */
+  const updateNav = () => {
+    const max = track.scrollWidth - track.clientWidth - 4;
+    prev.disabled = track.scrollLeft <= 4;
+    next.disabled = track.scrollLeft >= max;
+    const overflow = track.scrollWidth > track.clientWidth + 4;
+    slider.classList.toggle("has-overflow", overflow);
+  };
+  track.addEventListener("scroll", updateNav, { passive: true });
+  window.addEventListener("resize", updateNav);
+
+  slider.append(prev, track, next);
+  ui.albumResults.replaceChildren(slider);
+  requestAnimationFrame(updateNav);
 }
 
 // --- Aba Zone ----------------------------------------------------------------

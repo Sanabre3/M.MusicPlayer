@@ -390,6 +390,12 @@
             </label>
           </div>
 
+          <div class="zone-labelmode" role="group" aria-label="Rótulo dos diagramas">
+            <span class="zone-field__label">Diagrama mostra</span>
+            <button id="labelNota" class="zone-seg is-active" type="button">♪ Notas</button>
+            <button id="labelGrau" class="zone-seg" type="button" title="Grau relativo ao campo harmônico">№ Graus</button>
+          </div>
+
           <div id="zoneDiagram" class="zone-diagram"></div>
           <div id="voicingNav" class="voicing-nav" hidden>
             <label class="zone-field__label" for="voicingSelect">Posição do diagrama</label>
@@ -494,7 +500,7 @@
           <button class="pill pill--spotify" type="submit">Buscar</button>
         </form>
         <div id="albumStatus" class="yt-status" role="status"></div>
-        <ol id="albumResults" class="yt-results"></ol>
+        <div id="albumResults" class="album-results"></div>
         <div class="dialog__actions">
           <button id="spotifyDisconnect" class="pill" type="button">Desconectar</button>
           <button id="albumCloseBtn" class="pill" type="button">Fechar</button>

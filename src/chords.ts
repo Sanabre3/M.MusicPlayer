@@ -93,6 +93,17 @@ export function noteAtFret(open: number, fret: number): string {
   return NOTE_NAMES[(((open + fret) % 12) + 12) % 12]!;
 }
 
+/** Grau cromático de uma classe de altura em relação à tônica (1, b2, 2, …, 7). */
+const DEGREE_LABELS = ["1", "b2", "2", "b3", "3", "4", "b5", "5", "b6", "6", "b7", "7"];
+export function degreeLabel(pc: number, tonic: number): string {
+  return DEGREE_LABELS[((((pc - tonic) % 12) + 12) % 12)]!;
+}
+
+/** Rótulo legível do tom (ex: "G maior", "A menor"). */
+export function keyLabel(tonic: number, major: boolean): string {
+  return `${rootName(tonic)} ${major ? "maior" : "menor"}`;
+}
+
 // Mapa de nomes (incl. bemóis) para classe de altura.
 const NAME_TO_PC: Record<string, number> = {
   C: 0, "B#": 0, "C#": 1, Db: 1, D: 2, "D#": 3, Eb: 3, E: 4, Fb: 4,
@@ -381,4 +392,34 @@ export function harmonicField(tonic: number, major: boolean): DegreeChord[] {
     chord: { root: (tonic + iv) % 12, quality: quals[i]! },
     degree: degs[i]!,
   }));
+}
+
+/**
+ * Estima o tom (tônica + modo) de uma sequência de acordes pontuando, para cada
+ * um dos 24 tons, quantos acordes caem no campo harmônico — com ênfase na tônica
+ * aparecer no primeiro e (sobretudo) no último acorde. Retorna null se vazio.
+ */
+export function estimateKey(chords: Chord[]): { tonic: number; major: boolean } | null {
+  if (!chords.length) return null;
+  const first = chords[0]!;
+  const last = chords[chords.length - 1]!;
+  let best: { tonic: number; major: boolean; score: number } | null = null;
+
+  for (let tonic = 0; tonic < 12; tonic++) {
+    for (const major of [true, false]) {
+      const field = harmonicField(tonic, major);
+      const byRoot = new Map(field.map((d) => [d.chord.root, d.chord.quality]));
+      let score = 0;
+      for (const c of chords) {
+        const q = byRoot.get(c.root);
+        if (q !== undefined) score += q === c.quality ? 2 : 1.2; // diatônico (forte se a qualidade casa)
+        else score -= 1; // fora do campo harmônico
+      }
+      if (first.root === tonic) score += 1.5;
+      if (last.root === tonic) score += 2.5; // músicas tendem a terminar na tônica
+      if (major) score += 0.1; // desempate suave a favor do maior
+      if (!best || score > best.score) best = { tonic, major, score };
+    }
+  }
+  return best ? { tonic: best.tonic, major: best.major } : null;
 }

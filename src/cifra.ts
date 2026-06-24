@@ -13,7 +13,7 @@
 // Os acordes são autorados no tom original (transpose 0) e exibidos transpostos.
 // =============================================================================
 
-import { chordLabel, parseChord, transposeChord } from "./chords";
+import { chordLabel, estimateKey, keyLabel, parseChord, transposeChord } from "./chords";
 import type { Chord } from "./chords";
 import { isTabLine, parseTabLines, partTitle, renderTabView } from "./tab";
 import type { TabBlock } from "./tab";
@@ -44,10 +44,15 @@ interface CifraDeps {
   getPitches?: () => number[];
   /** Disparado quando uma cifra carregada/colada contém tablatura. */
   onTabsDetected?: (blocks: TabBlock[]) => void;
+  /** Disparado quando o tom da cifra carregada é estimado (no tom original). */
+  onKeyDetected?: (tonic: number, major: boolean) => void;
 }
 
 export class CifraEditor {
   private segments: Segment[] = [];
+  /** Tom estimado da cifra, no tom ORIGINAL (transpose 0). null = indefinido. */
+  private keyTonic: number | null = null;
+  private keyMajor = true;
   /** Acordes anotados manualmente: chave `segmento:palavra` → lista de acordes. */
   private readonly annotations = new Map<string, Chord[]>();
 
@@ -119,13 +124,35 @@ export class CifraEditor {
     }
 
     this.segments = segs;
+
+    // Estima o tom da cifra a partir dos acordes (no tom original).
+    const key = estimateKey(this.collectChords());
+    this.keyTonic = key ? key.tonic : null;
+    this.keyMajor = key ? key.major : true;
+
     this.render();
 
-    // Avisa a aba Zone se a cifra CARREGADA (não digitação) trouxe tablatura.
+    // Avisa a aba Zone quando uma cifra é CARREGADA (não em cada digitação).
     if (syncTextarea) {
       const blocks = segs.filter((s): s is Segment & { kind: "tab" } => s.kind === "tab").map((s) => s.block);
       if (blocks.length) this.deps.onTabsDetected?.(blocks);
+      if (key) this.deps.onKeyDetected?.(key.tonic, key.major);
     }
+  }
+
+  /** Reúne todos os acordes da cifra (linhas de acorde + anotações), tom original. */
+  private collectChords(): Chord[] {
+    const out: Chord[] = [];
+    for (const seg of this.segments) {
+      if (seg.kind === "chord") {
+        for (const tok of seg.tokens) {
+          const c = parseChord(tok);
+          if (c) out.push(c);
+        }
+      }
+    }
+    for (const arr of this.annotations.values()) out.push(...arr);
+    return out;
   }
 
   // --- carregamento de arquivo ----------------------------------------------
@@ -149,6 +176,17 @@ export class CifraEditor {
   private render(): void {
     const t = this.deps.getTranspose();
     const frag = document.createDocumentFragment();
+
+    // Cabeçalho "TOM: {tonalidade}" — tom estimado, já transposto para exibição.
+    if (this.keyTonic !== null) {
+      const disp = (((this.keyTonic + t) % 12) + 12) % 12;
+      const keyEl = document.createElement("div");
+      keyEl.className = "cf-key";
+      keyEl.innerHTML =
+        `<span class="cf-key__tag">TOM</span>` +
+        `<span class="cf-key__val">${keyLabel(disp, this.keyMajor)}</span>`;
+      frag.appendChild(keyEl);
+    }
 
     this.segments.forEach((seg, si) => {
       if (seg.kind === "blank") {

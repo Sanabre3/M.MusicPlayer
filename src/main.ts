@@ -408,9 +408,14 @@ function randomOffset(): number {
   return 1 + Math.floor(Math.random() * (tracks.length - 1));
 }
 
+/** Ícones SVG de play/pause (trocados sem usar emoji). */
+const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5 L8 19 L19 12 Z"/></svg>';
+const ICON_PAUSE =
+  '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+
 /** Atualiza o ícone play/pause, a animação do vinil e a tela de bloqueio. */
 function setPlayIcon(playing: boolean): void {
-  ui.play.textContent = playing ? "⏸" : "▶";
+  ui.play.innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
   ui.vinyl.classList.toggle("spinning", playing);
   ui.tonearm.classList.toggle("engaged", playing);
   media.setPlaybackState(playing);
@@ -507,7 +512,8 @@ ui.shuffle.addEventListener("click", () => {
 ui.repeat.addEventListener("click", () => {
   repeat = repeat === "off" ? "all" : repeat === "all" ? "one" : "off";
   ui.repeat.setAttribute("aria-pressed", String(repeat !== "off"));
-  ui.repeat.textContent = repeat === "one" ? "↻¹" : "↻";
+  // Mantém o ícone SVG; marca "repetir uma faixa" com um "1" via classe.
+  ui.repeat.classList.toggle("is-one", repeat === "one");
 });
 
 ui.volume.addEventListener("input", () => {

@@ -23,6 +23,8 @@
 html,
 body {
   height: 100%;
+  /* Evita rolagem horizontal por camadas fixas/100vw (largura da scrollbar). */
+  overflow-x: hidden;
 }
 
 body {
@@ -426,6 +428,7 @@ body {
   margin-bottom: 1.6rem;
 }
 .ctl {
+  position: relative;
   font-size: 1.15rem;
   color: var(--text);
   background: transparent;
@@ -438,6 +441,11 @@ body {
   place-items: center;
   transition: color 0.18s ease, transform 0.18s ease, background 0.18s ease;
 }
+.ctl svg {
+  width: 1.5em;
+  height: 1.5em;
+  display: block;
+}
 .ctl:hover {
   background: var(--glass);
   transform: translateY(-1px);
@@ -449,6 +457,18 @@ body {
 .ctl--toggle[aria-pressed="true"] {
   color: var(--accent);
 }
+/* Repetir "uma faixa": mostra um "1" sobre o ícone. */
+.ctl--repeat.is-one::after {
+  content: "1";
+  position: absolute;
+  right: 0.32rem;
+  bottom: 0.3rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.6rem;
+  line-height: 1;
+  color: var(--accent);
+}
 .ctl--play {
   width: 4rem;
   height: 4rem;
@@ -456,6 +476,10 @@ body {
   color: var(--ground);
   background: var(--accent);
   box-shadow: 0 12px 30px color-mix(in oklab, var(--accent) 45%, transparent);
+}
+.ctl--play svg {
+  width: 1.7em;
+  height: 1.7em;
 }
 .ctl--play:hover {
   transform: translateY(-2px) scale(1.04);
@@ -743,6 +767,7 @@ body.themed .backdrop {
 .video-stage {
   position: fixed;
   inset: 0;
+  overflow: hidden;
   z-index: -2;
   opacity: 0;
   pointer-events: none;
@@ -889,6 +914,11 @@ body.is-video .video-stage::after {
   border-radius: 0.7rem;
   padding: 0.55rem 0.8rem;
   cursor: pointer;
+  /* Preenche o campo e encolhe sem empurrar o layout (corta texto longo). */
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  text-overflow: ellipsis;
 }
 
 /* faixa de sliders verticais das 10 bandas */
@@ -1182,6 +1212,11 @@ body.is-video .video-stage::after {
   align-items: start;
   max-width: 70rem;
   margin: 0 auto;
+}
+/* Itens de grid precisam de min-width:0 para encolher e não transbordar. */
+.zone__main,
+.zone__side {
+  min-width: 0;
 }
 @media (max-width: 860px) {
   .zone__grid { grid-template-columns: 1fr; }
@@ -1922,7 +1957,7 @@ body.is-video .video-stage::after {
 
   /* Gaveta do crate ocupa quase toda a largura. */
   .crate {
-    width: min(26rem, 100vw);
+    width: min(26rem, 100%);
   }
 }
 
@@ -1983,6 +2018,29 @@ body.is-video .video-stage::after {
   }
   .zone-transpose {
     flex-wrap: wrap;
+  }
+  /* Afinação e capotraste empilham para não espremer os selects. */
+  .zone-setup {
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  /* Navegação de posição: setas + select centralizados, com espaço de toque. */
+  .voicing-nav {
+    gap: 0.5rem;
+  }
+  .voicing-nav .eq-select {
+    flex: 1;
+    min-width: 0;
+  }
+  .voicing-nav__label {
+    flex: 1 1 100%;
+    min-width: 0;
+    order: 3;
+  }
+  /* Campo harmônico: grade de acordes um pouco mais compacta. */
+  .zone-harmonic__chords {
+    grid-template-columns: repeat(auto-fit, minmax(3.5rem, 1fr));
+    gap: 0.4rem;
   }
   .fb-row {
     grid-template-columns: 1.8rem 1rem repeat(var(--frets, 5), 1fr);

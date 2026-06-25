@@ -339,6 +339,42 @@ function fretboardVoicings(c: Chord, tuning: number[], limit: number, requireBas
   return found.slice(0, limit).map(({ frets, isRoot, baseFret }) => ({ frets, isRoot, baseFret }));
 }
 
+/** Um modelo de acorde no teclado (uma inversão). */
+export interface PianoVoicing {
+  /** Posições absolutas em semitons (0 = dó mais grave da visão do teclado). */
+  notes: number[];
+  /** Classe de altura da tônica — para destacar a tecla. */
+  root: number;
+}
+
+/**
+ * Gera os modelos (inversões) de um acorde para o teclado: fundamental, 1ª
+ * inversão, 2ª inversão… Cada modelo coloca o baixo na 1ª oitava e empilha as
+ * notas seguintes ascendendo, para o músico ver cada disposição.
+ */
+export function pianoVoicings(chord: Chord): PianoVoicing[] {
+  const root = chord.root;
+  // Intervalos a partir da tônica, ascendentes e únicos → classes ordenadas.
+  const intervals = [...new Set(chordTones(chord).map((pc) => (((pc - root) % 12) + 12) % 12))].sort((a, b) => a - b);
+  const pcs = intervals.map((iv) => (root + iv) % 12); // tônica primeiro
+  const n = pcs.length;
+  if (!n) return [];
+  const voicings: PianoVoicing[] = [];
+  for (let inv = 0; inv < n; inv++) {
+    const notes: number[] = [];
+    let prev = -1;
+    for (let i = 0; i < n; i++) {
+      const pc = pcs[(inv + i) % n]!;
+      let a = pc; // começa na 1ª oitava (0..11)
+      while (a <= prev) a += 12;
+      notes.push(a);
+      prev = a;
+    }
+    voicings.push({ notes, root });
+  }
+  return voicings;
+}
+
 /**
  * Power chord (tônica + 5ª + 8ª) — voicing típico de guitarra. Oferece a forma
  * com tônica na 6ª e na 5ª corda como duas opções.

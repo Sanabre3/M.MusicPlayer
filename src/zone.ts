@@ -19,12 +19,13 @@ import {
   degreeLabel,
   guitarVoicings,
   harmonicField,
+  pianoVoicings,
   powerChordVoicings,
   transposeChord,
   TUNINGS,
   TUNING_PRESETS,
 } from "./chords";
-import type { Chord, Voicing } from "./chords";
+import type { Chord, PianoVoicing, Voicing } from "./chords";
 import type { Metronome } from "./metronome";
 import { CifraEditor } from "./cifra";
 import { TabEditor } from "./tab";
@@ -106,6 +107,8 @@ export class Zone {
   private hfFromCifra = false;
   private pinned: Chord | null = null;
   private voicings: Voicing[] = [];
+  /** Modelos (inversões) do acorde no teclado. */
+  private pianoModels: PianoVoicing[] = [];
   private beatDots: HTMLElement[] = [];
   private drumNowCol = -1;
   private readonly cifra: CifraEditor;
@@ -297,12 +300,20 @@ export class Zone {
   }
 
   private setTranspose(semitones: number): void {
-    this.transpose = Math.max(-6, Math.min(6, semitones));
+    const next = Math.max(-6, Math.min(6, semitones));
+    const delta = next - this.transpose;
+    this.transpose = next;
     this.el.transVal.textContent = this.transpose > 0 ? `+${this.transpose}` : String(this.transpose);
     this.deps.onTranspose(this.transpose);
     this.cifra.refreshTranspose();
+    // Acompanha a transposição no acorde exibido (teclado, braço, etc.).
+    if (delta !== 0) {
+      if (this.pinned) this.pinned = transposeChord(this.pinned, delta);
+      if (this.detected) this.detected = transposeChord(this.detected, delta);
+    }
     // Mantém o campo harmônico (e portanto os graus) acompanhando a cifra.
     if (this.hfFromCifra) this.applyCifraKeyToHarmonic();
+    if (delta !== 0) this.render();
   }
 
   private nudgeBpm(delta: number): void {
@@ -394,10 +405,11 @@ export class Zone {
     if (FRETTED.has(this.instrument)) this.tab.setPitches(this.frettedPitches());
   }
 
-  /** Percorre as posições (voicings) com as setas, em ciclo. */
+  /** Percorre as posições (voicings) com as setas, em ciclo (braço × teclado). */
   private stepVoicing(delta: number): void {
-    if (!this.voicings.length) return;
-    this.voicingIndex = (this.voicingIndex + delta + this.voicings.length) % this.voicings.length;
+    const count = this.positionCount();
+    if (!count) return;
+    this.voicingIndex = (this.voicingIndex + delta + count) % count;
     this.el.voicingSelect.value = String(this.voicingIndex);
     this.showVoicing();
   }
@@ -458,7 +470,15 @@ export class Zone {
       return;
     }
     if (this.instrument === "teclado") {
-      box.replaceChildren(this.renderPiano(chord));
+      // Teclado: vários modelos (inversões) navegáveis, como nos instrumentos de braço.
+      this.pianoModels = pianoVoicings(chord);
+      if (!this.pianoModels.length) {
+        box.replaceChildren(this.renderPiano(chordTones(chord), chord.root));
+        return;
+      }
+      if (this.voicingIndex >= this.pianoModels.length) this.voicingIndex = 0;
+      this.populateVoicingNav(this.pianoModels.length);
+      this.showVoicing();
       return;
     }
     // Instrumentos de braço: um modelo por vez, escolhido no seletor/setas.
@@ -470,9 +490,14 @@ export class Zone {
       return;
     }
     if (this.voicingIndex >= this.voicings.length) this.voicingIndex = 0;
-    // Popula o seletor "Pos. 1 … N".
+    this.populateVoicingNav(this.voicings.length);
+    this.showVoicing();
+  }
+
+  /** Popula o seletor "Pos. 1 … N" e mostra a navegação de posição. */
+  private populateVoicingNav(count: number): void {
     this.el.voicingSelect.replaceChildren(
-      ...this.voicings.map((_, i) => {
+      ...Array.from({ length: count }, (_, i) => {
         const opt = document.createElement("option");
         opt.value = String(i);
         opt.textContent = `Pos. ${i + 1}`;
@@ -480,13 +505,25 @@ export class Zone {
       }),
     );
     this.el.voicingSelect.value = String(this.voicingIndex);
-    this.el.voicingCount.textContent = `de ${this.voicings.length}`;
-    this.el.voicingNav.hidden = false;
-    this.showVoicing();
+    this.el.voicingCount.textContent = `de ${count}`;
+    this.el.voicingNav.hidden = count < 1;
   }
 
-  /** Renderiza apenas o diagrama do voicing atualmente selecionado. */
+  /** Nº de posições do instrumento atual (braço × teclado). */
+  private positionCount(): number {
+    return this.instrument === "teclado" ? this.pianoModels.length : this.voicings.length;
+  }
+
+  /** Renderiza apenas o modelo (posição) atualmente selecionado. */
   private showVoicing(): void {
+    if (this.instrument === "teclado") {
+      if (this.voicingIndex >= this.pianoModels.length) this.voicingIndex = 0;
+      const v = this.pianoModels[this.voicingIndex];
+      if (!v) return;
+      this.el.voicingSelect.value = String(this.voicingIndex);
+      this.el.diagram.replaceChildren(this.renderPiano(v.notes, v.root));
+      return;
+    }
     if (this.voicingIndex >= this.voicings.length) this.voicingIndex = 0;
     const voicing = this.voicings[this.voicingIndex];
     if (!voicing) return;
@@ -560,22 +597,29 @@ export class Zone {
 
   // --- teclado ---------------------------------------------------------------
 
-  private renderPiano(chord: Chord): HTMLElement {
-    const tones = new Set(chordTones(chord));
+  /**
+   * Renderiza um modelo (inversão) do acorde no teclado: acende apenas as notas
+   * absolutas do voicing, destacando a tônica. `notes` são posições em semitons
+   * (0 = dó mais grave da visão); `rootPc` é a classe da tônica.
+   */
+  private renderPiano(notes: number[], rootPc: number): HTMLElement {
+    const lit = new Set(notes);
+    const maxNote = notes.length ? Math.max(...notes) : 11;
+    const OCTAVES = Math.max(2, Math.ceil((maxNote + 1) / 12));
     const piano = document.createElement("div");
     piano.className = "piano";
     const whitePc = [0, 2, 4, 5, 7, 9, 11];
-    const OCTAVES = 2;
 
     for (let o = 0; o < OCTAVES; o++) {
       for (const pc of whitePc) {
+        const abs = o * 12 + pc;
         const key = document.createElement("div");
         key.className = "pk-white";
-        if (tones.has(pc)) {
+        if (lit.has(abs)) {
           key.classList.add("is-lit");
+          if (pc === rootPc) key.classList.add("is-root");
           key.appendChild(this.pianoLabel(pc));
         }
-        if (pc === chord.root) key.classList.add("is-root");
         piano.appendChild(key);
       }
     }
@@ -589,13 +633,14 @@ export class Zone {
     const unit = 100 / (whitePc.length * OCTAVES);
     for (let o = 0; o < OCTAVES; o++) {
       for (const b of blacks) {
+        const abs = o * 12 + b.pc;
         const key = document.createElement("div");
         key.className = "pk-black";
-        if (tones.has(b.pc)) {
+        if (lit.has(abs)) {
           key.classList.add("is-lit");
+          if (b.pc === rootPc) key.classList.add("is-root");
           key.appendChild(this.pianoLabel(b.pc));
         }
-        if (b.pc === chord.root) key.classList.add("is-root");
         key.style.left = `${(o * whitePc.length + b.boundary) * unit}%`;
         piano.appendChild(key);
       }
